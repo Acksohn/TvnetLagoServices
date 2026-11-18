@@ -1,0 +1,67 @@
+{% extends "panel/base.html" %}
+{% block titulo %}Cajas NAP{% endblock %}
+{% block migas %}<span>Clientes</span><span class="sep">/</span><strong>Cajas NAP</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>Cajas NAP</h1>
+    <p class="sub">Cada cliente ocupa un puerto. <span class="puerto puerto-libre puerto-mini">1</span> libre · <span class="puerto puerto-ocupado puerto-mini">2</span> ocupado (pasa el mouse para ver quién).</p>
+  </div>
+  {% if perms.ServerMikro.add_cajanap %}
+  <a class="btn btn-primario" href="{% url 'clientes:nap_nueva' %}">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Nueva caja NAP
+  </a>
+  {% endif %}
+</div>
+
+<div class="resumen">
+  <div class="kpi"><span class="kpi-titulo">Cajas</span><span class="kpi-valor">{{ resumen.cajas }}</span></div>
+  <div class="kpi kpi-verde"><span class="kpi-titulo">Puertos libres</span><span class="kpi-valor">{{ resumen.libres }}</span><span class="kpi-nota">de {{ resumen.puertos }}</span></div>
+  <div class="kpi kpi-rojo"><span class="kpi-titulo">Puertos ocupados</span><span class="kpi-valor">{{ resumen.ocupados }}</span></div>
+  <div class="kpi kpi-gris"><span class="kpi-titulo">Cajas llenas</span><span class="kpi-valor">{{ resumen.llenas }}</span></div>
+</div>
+
+<div class="tarjeta">
+  <form method="get" class="tarjeta-barra">
+    <div class="buscador">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input type="search" name="q" value="{{ busqueda }}" placeholder="Nombre, ubicación o detalles">
+    </div>
+    {% if busqueda %}<a class="btn btn-fantasma btn-sm" href="?">Limpiar</a>{% endif %}
+  </form>
+  <div class="tabla-scroll">
+  <table class="tabla">
+    <thead><tr>
+      <th>Nombre</th><th class="ocultar-movil">Ubicación</th><th class="ocultar-movil">Coordenadas</th>
+      <th>Puertos</th><th class="ocultar-movil ocultar-medio">Detalles</th><th class="der">Acciones</th>
+    </tr></thead>
+    <tbody>
+    {% for c in cajas %}
+      <tr>
+        <td><strong>{{ c.nombre }}</strong><div class="tenue chico">{{ c.n_ocupados }} de {{ c.puertos }} ocupados</div></td>
+        <td class="ocultar-movil">{{ c.ubicacion|default:"—" }}</td>
+        <td class="ocultar-movil mono chico">{% if c.coordenadas %}<a href="{{ c.enlace_mapa }}" target="_blank" rel="noopener" title="Abrir en Google Maps">{{ c.coordenadas }}</a>{% else %}<span class="tenue sans">—</span>{% endif %}</td>
+        <td><div class="puertos">
+          {% for p in c.mapa %}
+            {% if p.cliente %}<a class="puerto puerto-ocupado" href="{% url 'clientes:detalle' p.cliente.pk %}" title="Puerto {{ p.n }} · {{ p.cliente.nombre }} ({{ p.cliente.usuario_pppoe }})">{{ p.n }}</a>
+            {% else %}<span class="puerto puerto-libre" title="Puerto {{ p.n }} libre">{{ p.n }}</span>{% endif %}
+          {% endfor %}
+        </div></td>
+        <td class="ocultar-movil ocultar-medio chico">{{ c.detalles|default:"—"|linebreaksbr }}</td>
+        <td class="der"><div class="acciones-fila">
+          {% if perms.ServerMikro.change_cajanap %}<a class="btn btn-fantasma btn-sm" href="{% url 'clientes:nap_editar' c.pk %}">Editar</a>{% endif %}
+        </div></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6"><div class="vacio">
+        <svg viewBox="0 0 24 24" class="icono-gris"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h.01M12 9h.01M16 9h.01M8 13h.01M12 13h.01M16 13h.01"/></svg>
+        <strong>{% if busqueda %}Ninguna caja coincide{% else %}Todavía no hay cajas NAP{% endif %}</strong>
+        <span>{% if busqueda %}Prueba con otra búsqueda.{% else %}Crea la primera con <em>Nueva caja NAP</em>.{% endif %}</span>
+      </div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

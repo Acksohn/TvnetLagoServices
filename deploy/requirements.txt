@@ -1,0 +1,13 @@
+# ---- Copiar como "requirements.txt" junto a manage.py ----
+# Mejor aún: en tu PC ejecuta  py -m pip freeze > requirements.txt  (versiones exactas)
+# y luego agrega a mano las 3 últimas líneas de este archivo si no aparecen.
+Django>=4.2,<6
+celery>=5.4
+redis>=5.0
+netmiko>=4.5
+librouteros>=3.4
+requests>=2.31
+# Solo para el servidor:
+gunicorn>=22
+mysqlclient>=2.2
+python-dotenv>=1.0

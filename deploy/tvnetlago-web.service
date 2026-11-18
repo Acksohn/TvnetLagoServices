@@ -1,0 +1,18 @@
+# /etc/systemd/system/tvnetlago-web.service
+# Panel web (Django con Gunicorn). Nginx le pasa las visitas en 127.0.0.1:8000.
+[Unit]
+Description=TvnetLago panel web (Gunicorn)
+After=network.target mariadb.service redis-server.service
+
+[Service]
+User=tvnet
+Group=tvnet
+WorkingDirectory=/srv/tvnetlago
+ExecStart=/srv/tvnetlago/venv/bin/gunicorn TvnetLagoServices.wsgi:application \
+    --bind 127.0.0.1:8000 --workers 3 --timeout 60 \
+    --access-logfile - --error-logfile -
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

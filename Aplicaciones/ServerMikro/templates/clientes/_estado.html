@@ -1,0 +1,10 @@
+{# Etiqueta de estado de un cliente. Variable: c #}
+{% if c.estado == "activo" %}<span class="estado estado-ok"><i class="punto"></i>Activo</span>
+{% elif c.estado == "suspendido" %}<span class="estado estado-error"><i class="punto"></i>Suspendido</span>
+{% else %}<span class="estado estado-proceso"><i class="punto"></i>Pendiente</span>{% endif %}
+{% if c.ultimo_error and not c.accion_pendiente %}
+<details class="error-detalle">
+  <summary class="estado estado-error">Falló</summary>
+  <pre>{{ c.ultimo_error }}</pre>
+</details>
+{% endif %}

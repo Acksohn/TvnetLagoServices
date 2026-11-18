@@ -1,0 +1,75 @@
+{% extends "panel/base.html" %}
+{% block titulo %}{% if plan %}{{ plan.nombre }}{% else %}Nuevo plan OLT{% endif %}{% endblock %}
+{% block migas %}<a href="{% url 'olt:planes_olt' %}">Planes OLT</a><span class="sep">/</span><strong>{% if plan %}{{ plan.nombre }}{% else %}Nuevo{% endif %}</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>{% if plan %}Editar plan OLT{% else %}Nuevo plan OLT{% endif %}</h1>
+    <p class="sub">Un preset llena de una vez line-profile, service-profile y VLAN al autorizar (como «Use preset» de SmartOLT). Es opcional.</p>
+  </div>
+</div>
+
+<form method="post" class="formulario-ancho" novalidate>
+  {% csrf_token %}
+  <div class="rejilla-2">
+    <div class="tarjeta formulario">
+      <div class="tarjeta-titulo">Datos del plan</div>
+      {% if form.non_field_errors %}<div class="aviso aviso-error"><span>{{ form.non_field_errors|join:" " }}</span></div>{% endif %}
+      {% with campo=form.olt %}{% include "clientes/_campo.html" %}{% endwith %}
+      {% with campo=form.nombre %}{% include "clientes/_campo.html" %}{% endwith %}
+      <div class="campos-2">
+        {% with campo=form.lineprofile_id %}{% include "clientes/_campo.html" %}{% endwith %}
+        {% with campo=form.srvprofile_id %}{% include "clientes/_campo.html" %}{% endwith %}
+      </div>
+      {% with campo=form.vlan %}{% include "clientes/_campo.html" %}{% endwith %}
+      {% if form.olt_elegida and not form.olt_elegida.perfiles_ont.exists %}
+      <div class="aviso aviso-warning"><span>{{ form.olt_elegida.nombre }} no tiene perfiles leídos: escribe los números, o ve a
+        <a href="{% url 'olt:perfiles_ont' form.olt_elegida.pk %}">OLT → Perfiles</a> y pulsa <em>Leer perfiles de la OLT</em> para elegirlos por nombre.</span></div>
+      {% endif %}
+      <details {% if form.gemport.errors %}open{% endif %}><summary>Avanzado (GEM port)</summary>
+        {% with campo=form.gemport %}{% include "clientes/_campo.html" %}{% endwith %}
+      </details>
+      {% if usadas %}
+      <div class="aviso aviso-warning"><span>Lo usan <strong>{{ usadas }}</strong> ONU(s) ya autorizadas. Los cambios valen para las <strong>próximas</strong> autorizaciones; en la OLT, esas ONUs siguen con sus perfiles actuales.</span></div>
+      {% endif %}
+      <div class="acciones">
+        <a class="btn btn-fantasma" href="{% url 'olt:planes_olt' %}{% if plan.olt_id %}?olt={{ plan.olt_id }}{% endif %}">Cancelar</a>
+        <button class="btn btn-primario" type="submit" data-cargando="Guardando…">
+          <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg> Guardar plan OLT</button>
+      </div>
+    </div>
+    <div class="tarjeta formulario">
+      <div class="tarjeta-titulo">Así se usa al autorizar</div>
+      <div class="pasos">
+        <p>En la interfaz GPON de la ONU:</p>
+        <code>ont add P sn-auth "SN" omci ont-lineprofile-id <b id="v-line">{{ form.lineprofile_id.value|default:"L" }}</b> ont-srvprofile-id <b id="v-srv">{{ form.srvprofile_id.value|default:"S" }}</b> desc "..."</code>
+        <p>Después <span class="mono">ont port native-vlan</span> con la misma VLAN y, fuera de la interfaz:</p>
+        <code>service-port vlan <b id="v-vlan">{{ form.vlan.value|default:"V" }}</b> gpon F/S/P ont ID gemport <b id="v-gem">{{ form.gemport.value|default:"G" }}</b> multi-service user-vlan <b class="v-vlan2">{{ form.vlan.value|default:"V" }}</b> tag-transform translate</code>
+        <p class="tenue chico">Para ver qué perfiles tienes en la OLT: <span class="mono">display ont-lineprofile gpon all</span> y <span class="mono">display ont-srvprofile gpon all</span>.</p>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Paso 21: al cambiar la OLT se recarga para traer SUS perfiles y VLANs
+(function () {
+  var o = document.getElementById("id_olt"); if (!o) return;
+  o.addEventListener("change", function () {
+    var u = new URL(location.href); u.searchParams.set("olt", o.value); location.href = u.toString();
+  });
+})();
+// Vista previa del comando mientras escribes
+[["id_lineprofile_id","v-line"],["id_srvprofile_id","v-srv"],["id_vlan","v-vlan"],["id_gemport","v-gem"]].forEach(([campo, destino]) => {
+  const c = document.getElementById(campo); if (!c) return;
+  const pinta = () => {
+    document.getElementById(destino).textContent = c.value || "?";
+    if (destino === "v-vlan") document.querySelectorAll(".v-vlan2").forEach(e => e.textContent = c.value || "?");
+  };
+  c.addEventListener("input", pinta); c.addEventListener("change", pinta);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,122 @@
+{% extends "panel/base.html" %}
+{% block titulo %}VLANs · {{ olt.nombre }}{% endblock %}
+{% block migas %}<a href="{% url 'olt:olts' %}">OLTs</a><span class="sep">/</span><a href="{% url 'olt:detalle_olt' olt.pk %}">{{ olt.nombre }}</a><span class="sep">/</span><strong>VLANs</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>{{ olt.nombre }}</h1>
+    <p class="sub">VLANs de <strong>esta</strong> OLT. La misma VLAN en otra OLT es otra cosa y se maneja allá.
+      {% if olt.solo_lectura %}· <span class="etiqueta etiqueta-gris">Solo lectura</span>{% endif %}</p>
+  </div>
+  <div class="acciones-fila">
+    {% if olt.accion_pendiente %}<span class="estado estado-proceso"><i class="giro"></i>{{ olt.get_accion_pendiente_display }}…</span>{% endif %}
+  </div>
+</div>
+{% include "olt/_pestanas_olt.html" with pestana="vlans" %}
+
+{% if form or form_multi %}
+<form method="post" class="tarjeta formulario" style="max-width: 720px" novalidate>{% csrf_token %}
+  {% if form %}
+  <div class="tarjeta-titulo">Agregar VLAN</div>
+  {% if form.non_field_errors %}<div class="aviso aviso-error"><span>{{ form.non_field_errors|join:" " }}</span></div>{% endif %}
+  <div class="campos-2">
+    {% include "clientes/_campo.html" with campo=form.vlan_id %}
+    {% include "clientes/_campo.html" with campo=form.descripcion %}
+  </div>
+  {% include "clientes/_campo.html" with campo=form.gestion %}
+  {% include "clientes/_campo.html" with campo=form.iptv %}
+  {% include "clientes/_campo.html" with campo=form.dhcp_snooping %}
+  {% include "clientes/_campo.html" with campo=form.lan_to_lan %}
+  {% if form.crear_en_olt %}{% include "clientes/_campo.html" with campo=form.crear_en_olt %}{% endif %}
+  {% else %}
+  <div class="tarjeta-titulo">Agregar varias VLANs</div>
+  {% include "clientes/_campo.html" with campo=form_multi.vlans %}
+  {% include "clientes/_campo.html" with campo=form_multi.descripcion %}
+  {% if form_multi.crear_en_olt %}{% include "clientes/_campo.html" with campo=form_multi.crear_en_olt %}{% endif %}
+  {% endif %}
+  <div class="aviso aviso-warning"><span>Recuerda agregar la VLAN al <strong>puerto de subida (uplink)</strong> de la OLT, si no, el tráfico no llega al MikroTik. Eso no se hace solo (igual que en SmartOLT).</span></div>
+  <div class="acciones">
+    <a class="btn btn-fantasma" href="{% url 'olt:vlans' olt.pk %}">Cancelar</a>
+    <button class="btn btn-primario" type="submit" data-cargando="Guardando…">
+      <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg> Guardar</button>
+  </div>
+</form>
+{% else %}
+
+<div class="tarjeta barra-acciones">
+  {% if perms.ServerOLT.change_olt %}
+  <a class="btn btn-primario btn-sm" href="?form=una"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Agregar VLAN</a>
+  <a class="btn btn-fantasma btn-sm" href="?form=varias"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Agregar varias</a>
+  {% endif %}
+  <form method="post" action="{% url 'olt:vlan_accion' olt.pk %}">{% csrf_token %}
+    <button class="btn btn-fantasma btn-sm" name="accion" value="leer" type="submit" data-cargando="Enviando…" {% if olt.accion_pendiente %}disabled{% endif %}>
+      <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5"/></svg> Leer VLANs de la OLT</button>
+  </form>
+</div>
+
+{% if sin_worker %}
+<div class="aviso aviso-warning aviso-bloque"><span><strong>La orden lleva más de 2 minutos en la fila.</strong> ¿Está abierto el worker de <span class="mono">{{ cola }}</span>?</span>
+  {% if perms.ServerOLT.change_olt %}<form method="post" action="{% url 'olt:olt_liberar' olt.pk %}" style="margin-top:8px">{% csrf_token %}
+    <input type="hidden" name="volver" value="{{ request.get_full_path }}">
+    <button class="btn btn-fantasma btn-sm" type="submit">Cancelar esta orden</button>
+    <span class="chico tenue">Si no haces nada, a los 5 minutos se marca como fallida sola.</span></form>{% endif %}
+</div>
+{% elif olt.ultimo_error and not olt.accion_pendiente %}
+<div class="aviso aviso-error aviso-bloque"><strong>La última orden falló:</strong><pre>{{ olt.ultimo_error }}</pre></div>
+{% endif %}
+
+<div id="tabla-vlans" data-vivo>
+<div class="tarjeta separada-arriba">
+  <div class="tabla-scroll">
+  <table class="tabla tabla-compacta">
+    <thead><tr><th>VLAN-ID</th><th>Descripción</th><th class="centro" title="Gestión / TR069 / VoIP">Mgmt</th><th class="centro">IPTV</th><th class="centro" title="DHCP snooping">DHCP</th><th class="centro" title="LAN-to-LAN">L2L</th><th>En la OLT</th><th>ONUs</th><th>Planes</th><th class="der">Acción</th></tr></thead>
+    <tbody>
+    {% for v in vlans %}
+      <tr>
+        <td class="mono"><strong>{{ v.vlan_id }}</strong></td>
+        <td>{{ v.descripcion|default:"" }}</td>
+        <td class="centro">{% if v.gestion %}✔{% else %}<span class="tenue">·</span>{% endif %}</td>
+        <td class="centro">{% if v.iptv %}✔{% else %}<span class="tenue">·</span>{% endif %}</td>
+        <td class="centro">{% if v.dhcp_snooping %}✔{% else %}<span class="tenue">·</span>{% endif %}</td>
+        <td class="centro">{% if v.lan_to_lan %}✔{% else %}<span class="tenue">·</span>{% endif %}</td>
+        <td class="chico">{% if v.en_olt %}<span class="texto-verde">Sí</span> <span class="tenue">{% if v.service_ports is not None %}· {{ v.service_ports }} SP{% endif %}</span>{% elif v.en_olt is False %}<span class="texto-peligro">No está</span>{% else %}<span class="tenue">sin leer</span>{% endif %}</td>
+        <td>{% if v.onus %}<a href="{% url 'olt:configuradas' %}?olt={{ olt.pk }}">{{ v.onus }}</a>{% else %}<span class="tenue">0</span>{% endif %}</td>
+        <td class="chico">{{ v.planes|join:", "|default:"—" }}</td>
+        <td class="der"><div class="acciones-pon">
+          {% if perms.ServerOLT.change_olt %}
+          <details class="config-pon"><summary class="btn btn-fantasma btn-sm">Editar</summary>
+            <form method="post" action="{% url 'olt:vlan_accion' olt.pk %}" class="caja-config">{% csrf_token %}
+              <input type="hidden" name="accion" value="casillas"><input type="hidden" name="vlan" value="{{ v.pk }}">
+              <label>Descripción<input name="descripcion" value="{{ v.descripcion }}" maxlength="60"></label>
+              <label class="check"><input type="checkbox" name="gestion" value="1" {% if v.gestion %}checked{% endif %}> Gestión / TR069 / VoIP</label>
+              <label class="check"><input type="checkbox" name="iptv" value="1" {% if v.iptv %}checked{% endif %}> Multicast (IPTV)</label>
+              <label class="check"><input type="checkbox" name="dhcp_snooping" value="1" {% if v.dhcp_snooping %}checked{% endif %}> DHCP snooping</label>
+              <label class="check"><input type="checkbox" name="lan_to_lan" value="1" {% if v.lan_to_lan %}checked{% endif %}> LAN-to-LAN</label>
+              <button class="btn btn-primario btn-sm" type="submit">Guardar</button>
+            </form>
+          </details>
+          {% if not v.onus and not v.planes %}
+          <form method="post" action="{% url 'olt:vlan_accion' olt.pk %}" onsubmit="return confirm('¿Quitar la VLAN {{ v.vlan_id }} de {{ olt.nombre|escapejs }} en el sistema? (En la OLT no se borra.)')">{% csrf_token %}
+            <input type="hidden" name="accion" value="borrar"><input type="hidden" name="vlan" value="{{ v.pk }}">
+            <button class="btn btn-fantasma btn-sm texto-peligro" type="submit">Borrar</button>
+          </form>
+          {% endif %}
+          {% endif %}
+        </div></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="10"><div class="vacio">
+        <strong>{{ olt.nombre }} todavía no tiene VLANs en el sistema</strong>
+        <span>Pulsa <em>Leer VLANs de la OLT</em> para traer las que ya existen (no cambia nada en la OLT), o agrégalas con <em>Agregar VLAN</em>.</span>
+      </div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+</div>
+<p class="nota">Las casillas (gestión, IPTV, DHCP snooping, LAN-to-LAN) por ahora solo se guardan en el sistema como referencia; no cambian la OLT.
+  <em>Leer VLANs de la OLT</em> usa <span class="mono">display vlan all</span> (solo lectura) y sirve también en las OLTs de SmartOLT.</p>
+{% endif %}
+{% endblock %}

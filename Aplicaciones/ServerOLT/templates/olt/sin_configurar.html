@@ -1,0 +1,68 @@
+{% extends "panel/base.html" %}
+{% block titulo %}Sin configurar{% endblock %}
+{% block migas %}<span>OLT</span><span class="sep">/</span><strong>Sin configurar</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>ONUs sin configurar</h1>
+    <p class="sub">Equipos que la OLT detectó en <em>autofind</em> y todavía no están autorizados.</p>
+  </div>
+  <form method="post" action="{% url 'olt:buscar_todas' %}">
+    {% csrf_token %}
+    <button class="btn btn-primario" type="submit" data-cargando="Buscando…">
+      <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5"/></svg>
+      Buscar en todas las OLTs
+    </button>
+  </form>
+</div>
+
+{% if not hay_planes %}
+<div class="aviso aviso-warning">
+  <span>Todavía no hay ningún <strong>Plan OLT</strong>. Créalo en el
+  {% if user.is_staff %}<a href="{% url 'admin:ServerOLT_planolt_add' %}">admin</a>{% else %}admin{% endif %}
+  antes de autorizar (perfil de línea, perfil de servicio y VLAN).</span>
+</div>
+{% endif %}
+
+<!-- Tarjetas de OLTs: filtran la lista y tienen su propio botón Buscar -->
+<div class="olts" id="olts" data-vivo>
+  <a class="olt-chip {% if not olt_id %}activo{% endif %}" href="?{% if busqueda %}q={{ busqueda|urlencode }}{% endif %}">
+    <span class="olt-nombre">Todas</span>
+    <span class="olt-num">{{ total_pendientes }}</span>
+  </a>
+  {% for o in olts %}
+  <div class="olt-chip {% if olt_id == o.pk|stringformat:'d' %}activo{% endif %}">
+    <a href="?olt={{ o.pk }}{% if busqueda %}&q={{ busqueda|urlencode }}{% endif %}" class="olt-enlace">
+      <span class="olt-nombre">{{ o.nombre }}</span>
+      <span class="olt-host">{{ o.host }}</span>
+      {% if o.solo_lectura %}<span class="etiqueta etiqueta-gris" title="Esta OLT la maneja otro sistema">Solo lectura</span>{% endif %}
+      <span class="olt-num">{{ o.pendientes }}</span>
+    </a>
+    <form method="post" action="{% url 'olt:buscar' o.pk %}">
+      {% csrf_token %}
+      <button class="btn-icono" type="submit" title="Buscar ONUs nuevas en {{ o.nombre }}" data-cargando="">
+        <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5"/></svg>
+      </button>
+    </form>
+  </div>
+  {% empty %}
+  <p class="sub">No hay OLTs activas. Agrégalas en el admin.</p>
+  {% endfor %}
+</div>
+
+<div class="tarjeta">
+  <div class="tarjeta-barra">
+    <form method="get" class="buscador">
+      {% if olt_id %}<input type="hidden" name="olt" value="{{ olt_id }}">{% endif %}
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input type="search" name="q" value="{{ busqueda }}" placeholder="Buscar por SN o modelo">
+    </form>
+    <span class="en-vivo" title="La tabla se actualiza sola cada 5 segundos"><i></i>En vivo</span>
+  </div>
+
+  <div id="tabla-onus" data-vivo>
+    {% include "olt/_tabla_sin_configurar.html" %}
+  </div>
+</div>
+{% endblock %}

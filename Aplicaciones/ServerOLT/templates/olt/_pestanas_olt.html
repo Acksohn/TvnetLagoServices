@@ -1,0 +1,14 @@
+<nav class="pestanas">
+  <a class="{% if pestana == 'detalles' %}activo{% endif %}" href="{% url 'olt:detalle_olt' olt.pk %}">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg> Detalles de la OLT</a>
+  <a class="{% if pestana == 'pon' %}activo{% endif %}" href="{% url 'olt:puertos_pon' olt.pk %}">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></svg> Puertos PON</a>
+  <a class="{% if pestana == 'vlans' %}activo{% endif %}" href="{% url 'olt:vlans' olt.pk %}">
+    <svg viewBox="0 0 24 24"><path d="M3 12l9-9 9 9-9 9z"/><path d="M8 12h8"/></svg> VLANs</a>
+  <a class="{% if pestana == 'perfiles' %}activo{% endif %}" href="{% url 'olt:perfiles_ont' olt.pk %}">
+    <svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/></svg> Perfiles</a>
+  <a href="{% url 'olt:planes_olt' %}?olt={{ olt.pk }}">
+    <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/></svg> Presets</a>
+  <a href="{% url 'olt:velocidades' %}">
+    <svg viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/></svg> Perfiles de velocidad</a>
+</nav>

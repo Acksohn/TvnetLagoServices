@@ -1,0 +1,85 @@
+{% extends "panel/base.html" %}
+{% block titulo %}{% if perfil %}{{ perfil.nombre }}{% else %}Nuevo perfil de velocidad{% endif %}{% endblock %}
+{% block migas %}<a href="{% url 'olt:velocidades' %}">Perfiles de velocidad</a><span class="sep">/</span><strong>{% if perfil %}{{ perfil.nombre }}{% else %}Nuevo{% endif %}</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>{% if perfil %}Editar perfil de velocidad{% else %}Nuevo perfil de velocidad{% endif %}</h1>
+    <p class="sub">Se crea solo en la OLT la primera vez que autorizas (o cambias) una ONU con este perfil.</p>
+  </div>
+</div>
+
+<form method="post" class="formulario-ancho" novalidate>
+  {% csrf_token %}
+  <div class="rejilla-2">
+    <div class="tarjeta formulario">
+      <div class="tarjeta-titulo">Speed profile</div>
+      {% if form.bloqueado %}<div class="aviso aviso-info"><span>Este perfil <strong>ya está creado en la OLT</strong>: la velocidad y el nombre no se pueden cambiar (la OLT no se enteraría). Si necesitas otra velocidad, crea un perfil nuevo y cámbialo en las ONUs. Aquí solo puedes cambiar el tipo y si es predeterminado.</span></div>{% endif %}
+      {% if form.non_field_errors %}<div class="aviso aviso-error"><span>{{ form.non_field_errors|join:" " }}</span></div>{% endif %}
+      {% with campo=form.nombre %}{% include "clientes/_campo.html" %}{% endwith %}
+      <div class="campo {% if form.direccion.errors %}con-error{% endif %}">
+        <label>Dirección <span class="req">*</span></label>
+        <div class="opciones-modo">
+          {% for r in form.direccion %}<label class="opcion-modo">{{ r.tag }}<span>{% if r.data.value == "bajada" %}<strong>↓ Download</strong><small>Bajada del cliente (outbound)</small>{% else %}<strong>↑ Upload</strong><small>Subida del cliente (inbound)</small>{% endif %}</span></label>{% endfor %}
+        </div>
+        {% if form.direccion.help_text %}<small class="ayuda">{{ form.direccion.help_text }}</small>{% endif %}
+        {% for e in form.direccion.errors %}<small class="error">{{ e }}</small>{% endfor %}
+      </div>
+      {% with campo=form.usar_prefijo %}{% include "clientes/_campo.html" %}{% endwith %}
+      <div class="campos-2">
+        {% with campo=form.tipo %}{% include "clientes/_campo.html" %}{% endwith %}
+        {% with campo=form.kbps %}{% include "clientes/_campo.html" %}{% endwith %}
+      </div>
+      <div class="campo" style="margin-top:-10px"><small class="ayuda" id="vel-texto"></small></div>
+      {% with campo=form.predeterminado %}{% include "clientes/_campo.html" %}{% endwith %}
+      <details {% if form.cbs_ms.errors or form.pbs_ms.errors or form.indice_olt.errors or form.cbs_ms.value or form.pbs_ms.value %}open{% endif %}>
+        <summary>Avanzado (ráfagas e índice en la OLT)</summary>
+        <div class="campos-2">
+          {% with campo=form.cbs_ms %}{% include "clientes/_campo.html" %}{% endwith %}
+          {% with campo=form.pbs_ms %}{% include "clientes/_campo.html" %}{% endwith %}
+        </div>
+        {% with campo=form.indice_olt %}{% include "clientes/_campo.html" %}{% endwith %}
+      </details>
+      {% if usos %}
+      <div class="aviso aviso-info"><span>Lo usan <strong>{{ usos }}</strong> ONU(s).</span></div>
+      {% endif %}
+      <div class="acciones">
+        <a class="btn btn-fantasma" href="{% url 'olt:velocidades' %}">Cancelar</a>
+        <button class="btn btn-primario" type="submit" data-cargando="Guardando…">
+          <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg> Guardar perfil</button>
+      </div>
+    </div>
+    <div class="tarjeta formulario">
+      <div class="tarjeta-titulo">Qué hace en la OLT</div>
+      <div class="pasos">
+        <p>Crea una traffic table (una vez por OLT):</p>
+        {% if perfil %}<code>{{ perfil.comando_huawei }}</code>{% else %}<code>traffic table ip index <b>auto</b> name "TVN_<b id="v-nom">100M</b>_<b id="v-suf">DOWN</b>" cir <b class="v-k">102400</b> pir <b class="v-k">102400</b> priority 0 priority-policy local-setting</code>{% endif %}
+        <p>Y la pega al service-port de la ONU:</p>
+        <code>service-port … tag-transform translate inbound traffic-table index <b>SUBIDA</b> outbound traffic-table index <b>BAJADA</b></code>
+        <p class="tenue chico"><strong>Outbound</strong> = lo que sale de la OLT hacia el cliente (su bajada). <strong>Inbound</strong> = lo que entra desde el cliente (su subida).</p>
+        <p class="tenue chico"><strong>Consejo:</strong> 1 Mbps = 1024 kbps. Deja la OLT igual o un 10 % por encima del plan del MikroTik, así el cliente ve exactamente la velocidad del plan y la OLT solo frena abusos.</p>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const k = document.getElementById("id_kbps"), t = document.getElementById("vel-texto");
+  const n = document.getElementById("id_nombre");
+  const pinta = () => {
+    const v = parseInt(k.value, 10);
+    t.textContent = v ? "= " + (v >= 1048576 ? (v / 1048576).toFixed(2) + " Gbps" : v >= 1024 ? (v / 1024).toFixed(1) + " Mbps" : v + " kbps") : "";
+    document.querySelectorAll(".v-k").forEach(e => e.textContent = k.value || "?");
+  };
+  if (k) { k.addEventListener("input", pinta); pinta(); }
+  if (n && document.getElementById("v-nom")) n.addEventListener("input", () => document.getElementById("v-nom").textContent = n.value || "?");
+  document.querySelectorAll("input[name=direccion]").forEach(r => r.addEventListener("change", () => {
+    const s = document.getElementById("v-suf"); if (s) s.textContent = r.value === "subida" ? "UP" : "DOWN";
+  }));
+})();
+</script>
+{% endblock %}

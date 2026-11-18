@@ -1,0 +1,77 @@
+{% extends "panel/base.html" %}
+{% block titulo %}Routers MikroTik{% endblock %}
+{% block migas %}<span>Clientes</span><span class="sep">/</span><strong>Routers MikroTik</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>Routers MikroTik</h1>
+    <p class="sub">Donde viven los PPPoE de tus clientes. Cada router tiene su propia fila de órdenes.</p>
+  </div>
+  {% if perms.ServerMikro.add_router %}
+  <a class="btn btn-primario" href="{% url 'clientes:router_nuevo' %}">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Agregar router
+  </a>
+  {% endif %}
+</div>
+
+<div id="routers-vivo" data-vivo>
+<div class="resumen">
+  <div class="kpi"><span class="kpi-titulo">Routers</span><span class="kpi-valor">{{ resumen.routers }}</span></div>
+  <div class="kpi kpi-verde"><span class="kpi-titulo">Conectados</span><span class="kpi-valor">{{ resumen.conectados }}</span><span class="kpi-nota">en la última prueba</span></div>
+  <div class="kpi kpi-rojo"><span class="kpi-titulo">Sin conexión</span><span class="kpi-valor">{{ resumen.sin_conexion }}</span></div>
+  <div class="kpi"><span class="kpi-titulo">PPPoE conectados</span><span class="kpi-valor">{{ resumen.ppp }}</span><span class="kpi-nota">según la última prueba</span></div>
+</div>
+
+<div class="tarjeta">
+  <div class="tarjeta-barra">
+    <strong>Equipos</strong>
+    <span class="en-vivo" title="Se actualiza sola cada 5 segundos"><i></i>En vivo</span>
+  </div>
+  <div class="tabla-scroll">
+  <table class="tabla">
+    <thead><tr>
+      <th>Router</th><th class="ocultar-movil">Equipo</th><th>Conexión</th><th>Clientes</th>
+      <th class="ocultar-movil">PPPoE</th><th class="ocultar-movil ocultar-medio">Fila</th><th class="der">Acciones</th>
+    </tr></thead>
+    <tbody>
+    {% for r in routers %}
+      <tr>
+        <td><a class="enlace-fila" href="{% url 'clientes:router_detalle' r.pk %}">{{ r.nombre }}</a>
+          <div class="tenue chico mono">{{ r.ip }}:{{ r.puerto_efectivo }} · {{ r.usuario }}</div><div class="etiquetas-fila"><span class="etiqueta {% if r.metodo == "api" %}num-naranja{% elif r.metodo == "rest" %}etiqueta-gris{% endif %}">{% if r.metodo == "api_ssl" %}API-SSL{% elif r.metodo == "api" %}API sin cifrar{% else %}REST{% endif %}</span></div></td>
+        <td class="ocultar-movil">{% if r.modelo %}<strong>{{ r.modelo }}</strong><div class="tenue chico mono">RouterOS {{ r.version }}</div>{% else %}<span class="tenue">— sin probar</span>{% endif %}</td>
+        <td>
+          {% if r.accion_pendiente %}<span class="estado estado-proceso"><i class="giro"></i>Probando…</span>
+            {% if r.sin_worker %}<div class="chico" style="color:#b42318">¿Sin worker en {{ r.cola }}?</div>{% endif %}
+          {% elif r.conectado %}<span class="estado estado-ok"><i class="punto"></i>Conectado</span><div class="tenue chico">hace {{ r.info_leida|timesince }}</div>
+          {% elif r.conectado is False %}<span class="estado estado-error"><i class="punto"></i>Sin conexión</span><div class="tenue chico">hace {{ r.info_leida|default:r.accion_desde|timesince }}</div>
+          {% else %}<span class="estado estado-gris"><i class="punto"></i>Sin probar</span>{% endif %}
+        </td>
+        <td><div class="cifras">
+          <a href="{% url 'clientes:lista' %}?router={{ r.pk }}"><strong>{{ r.total }}</strong></a>
+          <span class="cifra-verde">{{ r.activos }} activos</span>
+          {% if r.suspendidos %}<span class="cifra-roja">{{ r.suspendidos }} suspendidos</span>{% endif %}
+          {% if r.pendientes %}<span class="tenue">{{ r.pendientes }} pendientes</span>{% endif %}
+        </div></td>
+        <td class="ocultar-movil mono">{% if r.ppp_activos is not None %}{{ r.ppp_activos }}{% else %}<span class="tenue sans">—</span>{% endif %}</td>
+        <td class="ocultar-movil ocultar-medio mono">{{ r.cola }}</td>
+        <td class="der"><div class="acciones-fila">
+          <form method="post" action="{% url 'clientes:router_info' r.pk %}">{% csrf_token %}<input type="hidden" name="volver" value="lista">
+            <button class="btn btn-fantasma btn-sm" type="submit" data-cargando="…" {% if r.accion_pendiente %}disabled{% endif %} title="Probar conexión y leer modelo, versión y PPPoE conectados">
+              <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5"/></svg> Probar</button>
+          </form>
+          <a class="btn btn-fantasma btn-sm" href="{% url 'clientes:router_detalle' r.pk %}">Ver</a>
+        </div></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7"><div class="vacio">
+        <svg viewBox="0 0 24 24" class="icono-gris"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01M8 9a6 6 0 018 0M5 6a10 10 0 0114 0"/></svg>
+        <strong>Todavía no hay routers</strong><span>Agrega el primero con <em>Agregar router</em>.</span>
+      </div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+</div>
+{% endblock %}

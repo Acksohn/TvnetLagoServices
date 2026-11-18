@@ -1,0 +1,62 @@
+{% extends "panel/base.html" %}
+{% block titulo %}Planes OLT{% endblock %}
+{% block migas %}<span>OLT</span><span class="sep">/</span><strong>Planes OLT</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>Planes OLT</h1>
+    <p class="sub">Cada plan es de una OLT: sus line/srv profiles y la VLAN que se usan al autorizar una ONU (<span class="mono">ont add</span> + <span class="mono">service-port</span>). La velocidad del cliente se controla en el MikroTik con <a href="{% url 'clientes:planes' %}">Planes</a>.</p>
+  </div>
+  {% if perms.ServerOLT.add_planolt %}
+  <a class="btn btn-primario" href="{% url 'olt:plan_olt_nuevo' %}{% if olt_id %}?olt={{ olt_id }}{% endif %}">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Nuevo plan OLT
+  </a>
+  {% endif %}
+</div>
+
+{% if sin_olt %}
+<div class="aviso aviso-warning aviso-bloque"><span><strong>{{ sin_olt }} plan(es) sin OLT.</strong> Desde el paso 20 cada plan es de una OLT
+  (sus line/srv profiles y su VLAN solo existen allí). Pulsa <em>Editar</em> en los marcados y elige su OLT.
+  Mientras tanto salen al autorizar en todas las OLTs.</span></div>
+{% endif %}
+
+<div class="olts">
+  <a class="olt-chip {% if not olt_id %}activo{% endif %}" href="?"><span class="olt-nombre">Todas las OLTs</span></a>
+  {% for o in olts %}<a class="olt-chip {% if olt_id == o.pk|stringformat:'d' %}activo{% endif %}" href="?olt={{ o.pk }}"><span class="olt-nombre">{{ o.nombre }}</span></a>{% endfor %}
+</div>
+
+<div class="tarjeta">
+  <div class="tabla-scroll">
+  <table class="tabla">
+    <thead><tr><th>OLT</th><th>Nombre</th><th>Line profile</th><th>Srv profile</th><th>VLAN</th><th class="ocultar-movil">GEM port</th><th>ONUs</th><th class="der">Acciones</th></tr></thead>
+    <tbody>
+    {% for p in planes %}
+      <tr>
+        <td>{% if p.olt %}<a href="{% url 'olt:vlans' p.olt_id %}">{{ p.olt.nombre }}</a>{% else %}<span class="etiqueta num-naranja">Sin OLT</span>{% endif %}</td>
+        <td><strong>{{ p.nombre }}</strong></td>
+        <td class="mono">{{ p.lineprofile_id }}</td>
+        <td class="mono">{{ p.srvprofile_id }}</td>
+        <td><span class="etiqueta">VLAN {{ p.vlan }}</span></td>
+        <td class="mono ocultar-movil">{{ p.gemport }}</td>
+        <td><div class="cifras"><strong>{{ p.total }}</strong>{% if p.activas %}<span class="cifra-verde">{{ p.activas }} activas</span>{% endif %}</div></td>
+        <td class="der"><div class="acciones-fila">
+          {% if perms.ServerOLT.change_planolt %}<a class="btn btn-fantasma btn-sm" href="{% url 'olt:plan_olt_editar' p.pk %}">Editar</a>{% endif %}
+          {% if perms.ServerOLT.delete_planolt and not p.total %}
+          <form method="post" action="{% url 'olt:plan_olt_eliminar' p.pk %}" onsubmit="return confirm('¿Eliminar el plan OLT {{ p.nombre|escapejs }}?')">{% csrf_token %}
+            <button class="btn btn-fantasma btn-sm texto-peligro" type="submit">Eliminar</button>
+          </form>
+          {% endif %}
+        </div></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="8"><div class="vacio">
+        <svg viewBox="0 0 24 24" class="icono-gris"><path d="M4 6h16M4 12h10M4 18h7"/></svg>
+        <strong>Todavía no hay planes OLT</strong><span>Sin un plan OLT no se puede autorizar ninguna ONU. Crea el primero con <em>Nuevo plan OLT</em>.</span>
+      </div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

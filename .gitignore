@@ -1,0 +1,31 @@
+# ---- Copiar como ".gitignore" en la carpeta del proyecto (junto a manage.py) ----
+
+# Entorno virtual
+venv/
+.venv/
+env/
+
+# Secretos (NUNCA a GitHub)
+.env
+
+# Base de datos local
+db.sqlite3
+*.sqlite3
+*.sqlite3-journal
+*.dump
+*.sql
+
+# Archivos generados
+__pycache__/
+*.pyc
+staticfiles/
+media/
+*.log
+
+# Editor / sistema
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# OJO: las carpetas migrations/ SÍ se suben. No las pongas aquí.

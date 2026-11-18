@@ -1,0 +1,43 @@
+{% extends "panel/base.html" %}
+{% block titulo %}{% if plan %}{{ plan.nombre }}{% else %}Nuevo plan{% endif %}{% endblock %}
+{% block migas %}<a href="{% url 'clientes:planes' %}">Planes</a><span class="sep">/</span><strong>{% if plan %}{{ plan.nombre }}{% else %}Nuevo{% endif %}</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>{% if plan %}Editar plan{% else %}Nuevo plan{% endif %}</h1>
+    <p class="sub">La velocidad se escribe como en el MikroTik: <span class="mono">512k</span>, <span class="mono">10M</span>, <span class="mono">1G</span>.</p>
+  </div>
+</div>
+
+<form method="post" class="formulario-plan" novalidate>
+  {% csrf_token %}
+  <div class="tarjeta formulario">
+    {% if form.non_field_errors %}<div class="aviso aviso-error"><span>{{ form.non_field_errors|join:" " }}</span></div>{% endif %}
+    <div class="tarjeta-titulo">Datos del plan</div>
+    {% with campo=form.nombre %}{% include "clientes/_campo.html" %}{% endwith %}
+    <div class="campos-2">
+      {% with campo=form.subida %}{% include "clientes/_campo.html" %}{% endwith %}
+      {% with campo=form.bajada %}{% include "clientes/_campo.html" %}{% endwith %}
+    </div>
+    {% with campo=form.precio %}{% include "clientes/_campo.html" %}{% endwith %}
+    {% with campo=form.descripcion %}{% include "clientes/_campo.html" %}{% endwith %}
+    {% with campo=form.activo %}{% include "clientes/_campo.html" %}{% endwith %}
+
+    {% if form.aplicar %}
+    <div class="caja-aplicar">
+      {% with campo=form.aplicar %}{% include "clientes/_campo.html" %}{% endwith %}
+      <p class="tenue chico">Este plan tiene <strong>{{ plan.clientes.count }}</strong> cliente{{ plan.clientes.count|pluralize }}. Velocidad actual: <span class="mono">{{ plan.velocidad }}</span>.</p>
+    </div>
+    {% endif %}
+
+    <div class="acciones">
+      <a class="btn btn-fantasma" href="{% url 'clientes:planes' %}">Cancelar</a>
+      <button class="btn btn-primario" type="submit" data-cargando="Guardando…">
+        <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+        Guardar plan
+      </button>
+    </div>
+  </div>
+</form>
+{% endblock %}

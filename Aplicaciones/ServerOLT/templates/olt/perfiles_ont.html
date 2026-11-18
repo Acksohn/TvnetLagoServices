@@ -1,0 +1,76 @@
+{% extends "panel/base.html" %}
+{% block titulo %}Perfiles · {{ olt.nombre }}{% endblock %}
+{% block migas %}<a href="{% url 'olt:olts' %}">OLTs</a><span class="sep">/</span><a href="{% url 'olt:detalle_olt' olt.pk %}">{{ olt.nombre }}</a><span class="sep">/</span><strong>Perfiles</strong>{% endblock %}
+
+{% block contenido %}
+<div id="ficha-perfiles" data-vivo>
+<div class="cabecera">
+  <div>
+    <h1>{{ olt.nombre }}</h1>
+    <p class="sub">Line-profiles y service-profiles que existen en esta OLT. Se eligen por nombre al autorizar, como en SmartOLT.</p>
+  </div>
+  <div class="acciones-fila">
+    {% if olt.accion_pendiente %}<span class="estado estado-proceso"><i class="giro"></i>{{ olt.get_accion_pendiente_display }}…</span>{% endif %}
+  </div>
+</div>
+{% include "olt/_pestanas_olt.html" with pestana="perfiles" %}
+
+<div class="tarjeta barra-acciones">
+  <form method="post">{% csrf_token %}
+    <button class="btn btn-primario btn-sm" type="submit" data-cargando="Enviando…" {% if olt.accion_pendiente %}disabled{% endif %}>
+      <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5"/></svg> Leer perfiles de la OLT</button>
+  </form>
+  <span class="tenue chico">Solo lee (<span class="mono">display ont-lineprofile / ont-srvprofile gpon</span>). No cambia nada en la OLT.</span>
+</div>
+
+{% if sin_worker %}
+<div class="aviso aviso-warning aviso-bloque"><span><strong>La orden lleva más de 2 minutos en la fila.</strong> ¿Está abierto el worker de <span class="mono">{{ cola }}</span>?</span></div>
+{% elif olt.ultimo_error and not olt.accion_pendiente %}
+<div class="aviso aviso-error aviso-bloque"><strong>La última orden falló:</strong><pre>{{ olt.ultimo_error }}</pre></div>
+{% endif %}
+
+<div class="rejilla-2 separada-arriba" style="grid-template-columns: minmax(0,1.3fr) minmax(0,1fr)">
+  <div class="tarjeta">
+    <div class="tarjeta-barra"><strong>Line-profiles</strong><span class="tenue chico">cómo viaja la ONU por la fibra</span></div>
+    <div class="tabla-scroll">
+    <table class="tabla tabla-compacta">
+      <thead><tr><th>ID</th><th>Nombre</th><th>GEM</th><th>VLANs que deja pasar</th><th class="der">ONUs</th></tr></thead>
+      <tbody>
+      {% for p in lineas %}
+        <tr {% if not p.existe %}class="fila-apagada"{% endif %}>
+          <td class="mono">{{ p.profile_id }}</td>
+          <td><strong>{{ p.nombre }}</strong>{% if not p.existe %} <span class="etiqueta etiqueta-gris">ya no está</span>{% endif %}</td>
+          <td class="mono">{% if p.gems %}{{ p.gems|join:", " }}{% else %}<span class="tenue">—</span>{% endif %}</td>
+          <td class="chico">{% if p.modo_mapeo and "vlan" not in p.modo_mapeo %}cualquiera <span class="tenue">(mapeo por {{ p.modo_mapeo }})</span>{% elif p.vlans %}<span class="mono">{{ p.vlans|join:", " }}</span>{% elif p.leido %}<span class="tenue">ninguna fija</span>{% else %}<span class="tenue">sin detalle</span>{% endif %}</td>
+          <td class="der mono">{{ p.enlaces|default_if_none:"—" }}{% if p.nuestras %} <span class="tenue">({{ p.nuestras }} del sistema)</span>{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5"><div class="vacio vacio-chico"><strong>Sin leer todavía</strong><span>Pulsa <em>Leer perfiles de la OLT</em>.</span></div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  <div class="tarjeta">
+    <div class="tarjeta-barra"><strong>Service-profiles</strong><span class="tenue chico">los puertos de la ONU</span></div>
+    <div class="tabla-scroll">
+    <table class="tabla tabla-compacta">
+      <thead><tr><th>ID</th><th>Nombre</th><th class="der">ONUs</th></tr></thead>
+      <tbody>
+      {% for p in servicios %}
+        <tr {% if not p.existe %}class="fila-apagada"{% endif %}>
+          <td class="mono">{{ p.profile_id }}</td>
+          <td><strong>{{ p.nombre }}</strong>{% if not p.existe %} <span class="etiqueta etiqueta-gris">ya no está</span>{% endif %}</td>
+          <td class="der mono">{{ p.enlaces|default_if_none:"—" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="3"><div class="vacio vacio-chico"><strong>Sin leer todavía</strong></div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+<p class="nota">«ONUs» es el <em>binding times</em> que da la OLT: cuántas ONUs usan ese perfil (incluidas las de SmartOLT). Los perfiles se crean en la OLT (o los creó SmartOLT); aquí solo se leen y se eligen.</p>
+</div>
+{% endblock %}

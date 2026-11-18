@@ -1,0 +1,66 @@
+{% extends "panel/base.html" %}
+{% block titulo %}Planes{% endblock %}
+{% block migas %}<span>Clientes</span><span class="sep">/</span><strong>Planes</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>Planes de internet</h1>
+    <p class="sub">Velocidad y precio de cada plan. Al cambiar la velocidad de un plan, sus clientes se actualizan por la fila del router.</p>
+  </div>
+  {% if perms.ServerMikro.add_plan %}
+  <a class="btn btn-primario" href="{% url 'clientes:plan_nuevo' %}">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+    Nuevo plan
+  </a>
+  {% endif %}
+</div>
+
+{% if sin_plan %}
+<div class="aviso aviso-warning">
+  <span><strong>{{ sin_plan }} cliente{{ sin_plan|pluralize }} sin plan.</strong>
+  Asígnales uno desde su ficha, o créalos todos de una vez con
+  <code>py manage.py crear_planes_desde_clientes</code>.</span>
+</div>
+{% endif %}
+
+<div id="planes" data-vivo>
+{% if planes %}
+<div class="planes">
+  {% for p in planes %}
+  <div class="plan {% if not p.activo %}plan-inactivo{% endif %}">
+    <div class="plan-cabeza">
+      <div>
+        <div class="plan-nombre">{{ p.nombre }}</div>
+        {% if p.descripcion %}<div class="tenue chico">{{ p.descripcion }}</div>{% endif %}
+      </div>
+      {% if not p.activo %}<span class="etiqueta etiqueta-gris">Inactivo</span>{% endif %}
+    </div>
+    <div class="plan-precio">${{ p.precio|floatformat:2 }}<small>/mes</small></div>
+    <div class="plan-velocidad">
+      <div><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg><strong class="mono">{{ p.subida }}</strong><span>subida</span></div>
+      <div><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg><strong class="mono">{{ p.bajada }}</strong><span>bajada</span></div>
+    </div>
+    <div class="plan-pie">
+      <span class="tenue chico">
+        <strong class="plan-num">{{ p.total }}</strong> cliente{{ p.total|pluralize }} · {{ p.activos }} activo{{ p.activos|pluralize }}
+      </span>
+      {% if perms.ServerMikro.change_plan %}<a class="btn btn-fantasma btn-sm" href="{% url 'clientes:plan_editar' p.pk %}">Editar</a>{% endif %}
+    </div>
+    {% if p.desfasados %}
+    <div class="plan-alerta">{{ p.desfasados }} cliente{{ p.desfasados|pluralize }} con otra velocidad en el MikroTik</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="tarjeta">
+  <div class="vacio">
+    <svg viewBox="0 0 24 24" class="icono-gris"><path d="M4 18l5-6 4 3 7-9"/></svg>
+    <strong>Todavía no hay planes</strong>
+    <span>Crea el primero con <em>Nuevo plan</em> (por ejemplo, Hogar 20 Megas, 10M/20M, $20).</span>
+  </div>
+</div>
+{% endif %}
+</div>
+{% endblock %}

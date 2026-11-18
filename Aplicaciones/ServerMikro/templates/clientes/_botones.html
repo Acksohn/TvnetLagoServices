@@ -1,0 +1,19 @@
+{# Botones de acción de un cliente. Variables: c (cliente), volver ("detalle" o vacío) #}
+{% if c.accion_pendiente %}
+  <span class="estado estado-proceso"><i class="giro"></i>{{ c.get_accion_pendiente_display }}…</span>
+{% elif c.estado == "pendiente" %}
+  <form method="post" action="{% url 'clientes:accion' c.pk 'crear' %}">
+    {% csrf_token %}<input type="hidden" name="volver" value="{{ volver }}"><input type="hidden" name="siguiente" value="{{ request.get_full_path }}">
+    <button class="btn btn-primario btn-sm" type="submit" data-cargando="Enviando…">Crear en MikroTik</button>
+  </form>
+{% elif c.estado == "activo" %}
+  <form method="post" action="{% url 'clientes:accion' c.pk 'suspender' %}" onsubmit="return confirm('¿Suspender a {{ c.nombre|escapejs }}? Se le cortará el internet.')">
+    {% csrf_token %}<input type="hidden" name="volver" value="{{ volver }}"><input type="hidden" name="siguiente" value="{{ request.get_full_path }}">
+    <button class="btn btn-peligro btn-sm" type="submit" data-cargando="Enviando…">Suspender</button>
+  </form>
+{% else %}
+  <form method="post" action="{% url 'clientes:accion' c.pk 'activar' %}">
+    {% csrf_token %}<input type="hidden" name="volver" value="{{ volver }}"><input type="hidden" name="siguiente" value="{{ request.get_full_path }}">
+    <button class="btn btn-exito btn-sm" type="submit" data-cargando="Enviando…">Activar</button>
+  </form>
+{% endif %}

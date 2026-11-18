@@ -1,0 +1,123 @@
+{% extends "panel/base.html" %}
+{% block titulo %}Tareas en cola{% endblock %}
+{% block migas %}<span>Sistema</span><span class="sep">/</span><strong>Tareas en cola</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>Tareas en cola</h1>
+    <p class="sub">Cada orden que el sistema mandó a una OLT o a un MikroTik: cuánto esperó en la fila, cuánto tardó y qué respondió el equipo.</p>
+  </div>
+</div>
+
+<div id="tareas-vivo" data-vivo>
+<div class="resumen">
+  <a class="kpi kpi-naranja {% if estado == 'pendientes' %}activo{% endif %}" href="{% querystring estado='pendientes' page=None %}">
+    <span class="kpi-titulo">Pendientes ahora</span><span class="kpi-valor">{{ resumen.pendientes }}</span>
+    <span class="kpi-nota">en cola o ejecutándose</span>
+  </a>
+  <a class="kpi kpi-verde {% if estado == 'ok' %}activo{% endif %}" href="{% querystring estado='ok' page=None %}">
+    <span class="kpi-titulo">Completadas hoy</span><span class="kpi-valor">{{ resumen.ok_hoy }}</span>
+  </a>
+  <a class="kpi kpi-rojo {% if estado == 'error' %}activo{% endif %}" href="{% querystring estado='error' page=None %}">
+    <span class="kpi-titulo">Con error hoy</span><span class="kpi-valor">{{ resumen.error_hoy }}</span>
+  </a>
+  <a class="kpi {% if not estado %}activo{% endif %}" href="{% querystring estado=None page=None %}">
+    <span class="kpi-titulo">Ver todas</span><span class="kpi-valor">↺</span>
+    <span class="kpi-nota">historial completo</span>
+  </a>
+</div>
+
+{% if colas %}
+<div class="olts">
+  <a class="olt-chip {% if not cola %}activo{% endif %}" href="{% querystring cola=None page=None %}"><span class="olt-nombre">Todas las filas</span></a>
+  {% for c in colas %}
+  <a class="olt-chip {% if cola == c.cola %}activo{% endif %}" href="{% querystring cola=c.cola page=None %}">
+    <span class="olt-nombre mono">{{ c.cola }}</span>
+    {% if c.pendientes %}<span class="olt-num num-naranja" title="Pendientes">{{ c.pendientes }}</span>{% endif %}
+    {% if c.errores %}<span class="olt-num num-rojo" title="Errores hoy">{{ c.errores }}</span>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+</div>
+
+<div class="tarjeta">
+  <form method="get" class="tarjeta-barra">
+    {% if estado %}<input type="hidden" name="estado" value="{{ estado }}">{% endif %}
+    {% if cola %}<input type="hidden" name="cola" value="{{ cola }}">{% endif %}
+    <div class="buscador">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input type="search" name="q" value="{{ busqueda }}" placeholder="Cliente, SN, OLT o texto del error">
+    </div>
+    {% if busqueda or estado or cola %}<a class="btn btn-fantasma btn-sm" href="?">Limpiar filtros</a>{% endif %}
+    <span class="en-vivo" title="Se actualiza sola cada 5 segundos"><i></i>En vivo</span>
+  </form>
+
+  <div id="tabla-tareas" data-vivo>
+    <div class="tabla-scroll">
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Hora</th>
+          <th>Tarea</th>
+          <th class="ocultar-movil">Fila</th>
+          <th>Estado</th>
+          <th class="ocultar-movil">Esperó</th>
+          <th class="ocultar-movil">Duró</th>
+          <th class="ocultar-movil ocultar-medio">Resultado</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for t in pagina %}
+        <tr class="{% if t.estado == 'error' %}fila-error{% endif %}">
+          <td class="tenue" title="{{ t.creada|date:'d/m/Y H:i:s' }}">{{ t.creada|date:"H:i:s" }}<div class="chico">{{ t.creada|date:"d/m" }}</div></td>
+          <td class="ajustar">
+            {% if t.enlace %}<a class="enlace-fila" href="{{ t.enlace }}">{{ t.descripcion }}</a>{% else %}<strong>{{ t.descripcion }}</strong>{% endif %}
+            {% if t.intentos > 1 %}<div class="tenue chico">{{ t.intentos }} intentos</div>{% endif %}
+          </td>
+          <td class="mono ocultar-movil">{{ t.cola }}</td>
+          <td>
+            {% if t.estado == "ok" %}<span class="estado estado-ok"><i class="punto"></i>Completada</span>
+            {% elif t.estado == "error" %}
+              <details class="error-detalle">
+                <summary class="estado estado-error"><i class="punto"></i>Error</summary>
+                <pre>{{ t.resultado }}</pre>
+              </details>
+            {% elif t.estado == "ejecutando" %}<span class="estado estado-proceso"><i class="giro"></i>Ejecutando</span>
+            {% elif t.estado == "reintento" %}<span class="estado estado-proceso" title="{{ t.resultado }}"><i class="giro"></i>Reintentando</span>
+            {% elif t.atascada %}<span class="estado estado-error" title="Lleva más de 2 minutos en la fila. ¿Está encendido el worker de {{ t.cola }}?"><i class="punto"></i>Sin worker?</span>
+            {% else %}<span class="estado estado-gris"><i class="giro"></i>En cola</span>{% endif %}
+          </td>
+          <td class="mono ocultar-movil">{% if t.espera is not None %}{{ t.espera|floatformat:1 }} s{% else %}<span class="tenue">—</span>{% endif %}</td>
+          <td class="mono ocultar-movil">{% if t.duracion is not None %}{{ t.duracion|floatformat:1 }} s{% else %}<span class="tenue">—</span>{% endif %}</td>
+          <td class="tenue chico ocultar-movil ocultar-medio ajustar resultado">{% if t.estado != "error" %}{{ t.resultado|truncatechars:70 }}{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7">
+          <div class="vacio">
+            <svg viewBox="0 0 24 24" class="icono-gris"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            {% if busqueda or estado or cola %}
+              <strong>Ninguna tarea coincide con los filtros</strong><span>Pulsa <em>Limpiar filtros</em>.</span>
+            {% else %}
+              <strong>Todavía no hay tareas registradas</strong><span>Suspende un cliente o busca ONUs y aparecerán aquí al instante.</span>
+            {% endif %}
+          </div>
+        </td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% if pagina.paginator.num_pages > 1 %}
+    <div class="paginacion">
+      <span class="tenue">Mostrando {{ pagina.start_index }}–{{ pagina.end_index }} de {{ pagina.paginator.count }}</span>
+      <div class="paginas">
+        {% if pagina.has_previous %}<a class="btn btn-fantasma btn-sm" href="{% querystring page=pagina.previous_page_number %}">‹ Anterior</a>{% endif %}
+        <span class="pagina-actual">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+        {% if pagina.has_next %}<a class="btn btn-fantasma btn-sm" href="{% querystring page=pagina.next_page_number %}">Siguiente ›</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

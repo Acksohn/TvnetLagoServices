@@ -1,0 +1,37 @@
+{% extends "panel/base.html" %}
+{% block titulo %}{% if olt %}Editar {{ olt.nombre }}{% else %}Agregar OLT{% endif %}{% endblock %}
+{% block migas %}<a href="{% url 'olt:olts' %}">OLTs</a><span class="sep">/</span><strong>{% if olt %}{{ olt.nombre }}{% else %}Nueva{% endif %}</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>{% if olt %}Editar OLT{% else %}Agregar OLT{% endif %}</h1>
+    <p class="sub">Datos para que el worker entre a la OLT. La página nunca se conecta: solo guarda.</p>
+  </div>
+</div>
+
+<form method="post" class="formulario-ancho" novalidate autocomplete="off">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="aviso aviso-error"><span>{{ form.non_field_errors|join:" " }}</span></div>{% endif %}
+  <div class="rejilla-2">
+    <div class="tarjeta formulario">
+      <div class="tarjeta-titulo">Conexión</div>
+      {% for campo in form %}{% if campo.name in "nombre host protocolo puerto_ssh usuario clave" %}
+        {% include "clientes/_campo.html" %}
+      {% endif %}{% endfor %}
+    </div>
+    <div class="tarjeta formulario">
+      <div class="tarjeta-titulo">Opciones</div>
+      {% for campo in form %}{% if campo.name in "solo_lectura snmp_comunidad snmp_puerto activa" %}
+        {% include "clientes/_campo.html" %}
+      {% endif %}{% endfor %}
+      <div class="aviso aviso-info"><span>Usa un <strong>usuario propio para el sistema</strong> (no el de SmartOLT ni root). Si es una OLT en producción que maneja SmartOLT, deja marcado <em>Solo lectura</em>.</span></div>
+      <div class="acciones">
+        <a class="btn btn-fantasma" href="{% if olt %}{% url 'olt:detalle_olt' olt.pk %}{% else %}{% url 'olt:olts' %}{% endif %}">Cancelar</a>
+        <button class="btn btn-primario" type="submit" data-cargando="Guardando…">
+          <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg> Guardar OLT</button>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,120 @@
+{% extends "panel/base.html" %}
+{% block titulo %}Nuevo cliente{% endblock %}
+{% block migas %}<a href="{% url 'clientes:lista' %}">Clientes</a><span class="sep">/</span><strong>Nuevo</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>Nuevo cliente</h1>
+    <p class="sub">Se guarda primero en el sistema y luego la fila del router lo crea en el MikroTik (secret PPPoE + cola de velocidad).</p>
+  </div>
+</div>
+
+<form method="post" class="formulario-ancho" novalidate>
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="aviso aviso-error"><span>{{ form.non_field_errors|join:" " }}</span></div>{% endif %}
+
+  <div class="rejilla-2">
+    <div class="tarjeta formulario">
+      <div class="tarjeta-titulo">Datos personales</div>
+      {% for campo in form %}{% if campo.name in "nombre cedula telefono direccion" %}
+        {% include "clientes/_campo.html" %}
+      {% endif %}{% endfor %}
+    </div>
+
+    <div class="tarjeta formulario">
+      <div class="tarjeta-titulo">Servicio</div>
+      {% include "clientes/_campo.html" with campo=form.usuario_pppoe %}
+      {% include "clientes/_campo.html" with campo=form.clave_pppoe %}
+      {% include "clientes/_campo.html" with campo=form.router %}
+      {% include "clientes/_campo.html" with campo=form.red %}
+      <div class="campo campo-ip-auto" id="ip-auto" hidden>
+        <label>IP que se asignará</label>
+        <div class="ip-auto"><span class="mono" id="ip-auto-valor">—</span><span class="tenue chico" id="ip-auto-nota"></span></div>
+      </div>
+      <details class="avanzado" {% if form.ip.value or form.ip.errors %}open{% endif %}>
+        <summary>Escribir la IP a mano (avanzado)</summary>
+        {% include "clientes/_campo.html" with campo=form.ip %}
+      </details>
+      {% include "clientes/_campo.html" with campo=form.plan %}
+      <div class="rejilla-nap">
+        {% include "clientes/_campo.html" with campo=form.caja_nap %}
+        {% include "clientes/_campo.html" with campo=form.puerto_nap %}
+      </div>
+      {% include "clientes/_campo.html" with campo=form.crear_ahora %}
+      <div class="acciones">
+        <a class="btn btn-fantasma" href="{% url 'clientes:lista' %}">Cancelar</a>
+        <button class="btn btn-primario" type="submit" data-cargando="Guardando…">
+          <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+          Guardar cliente
+        </button>
+      </div>
+    </div>
+  </div>
+</form>
+
+<script>
+/* Paso 16: al elegir router solo salen sus redes (con cuántas IPs les quedan) y se muestra
+   la IP que le tocará. La IP real se asigna al GUARDAR, así nunca se repite. */
+(function () {
+  var router = document.getElementById("{{ form.router.id_for_label }}");
+  var red = document.getElementById("{{ form.red.id_for_label }}");
+  var ip = document.getElementById("{{ form.ip.id_for_label }}");
+  var caja = document.querySelector("[data-nap=caja]");
+  var puerto = document.querySelector("[data-nap=puerto]");
+  var cajaIp = document.getElementById("ip-auto");
+  var valor = document.getElementById("ip-auto-valor");
+  var nota = document.getElementById("ip-auto-nota");
+
+  function filtrar() {
+    var hay = 0;
+    Array.prototype.forEach.call(red.options, function (op) {
+      if (!op.value) return;
+      var sirve = op.dataset.router === router.value;
+      op.hidden = !sirve; op.disabled = !sirve;
+      if (sirve) hay++;
+      if (!sirve && op.selected) red.value = "";
+    });
+    red.closest(".campo").style.display = router.value ? "" : "none";
+    // (el texto de las opciones no se cambia: Select2 lo guarda la primera vez)
+    var ayudaRed = red.closest(".campo").querySelector(".ayuda");
+    if (ayudaRed) ayudaRed.textContent = hay ? "El sistema le da la siguiente IP libre de esa red al guardar."
+                                             : "Este router no tiene Redes IPv4: créalas en Redes IPv4 o escribe la IP a mano.";
+    if (window.refrescarSelect) refrescarSelect(red);
+  }
+  function sugerir() {
+    if (!router.value) { cajaIp.hidden = true; return; }
+    cajaIp.hidden = false;
+    if (ip.value.trim()) { valor.textContent = ip.value.trim(); nota.textContent = "escrita a mano"; return; }
+    valor.textContent = "…"; nota.textContent = "";
+    fetch("{{ url_siguiente_ip }}?router=" + router.value + "&red=" + (red.value || ""))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        valor.textContent = d.ip || "—";
+        nota.textContent = d.ip ? "(se confirma al guardar)" : d.texto;
+        cajaIp.classList.toggle("ip-auto-error", !d.ip);
+      })
+      .catch(function () {});
+  }
+  function puertosLibres() {
+    if (!caja || !puerto) return;
+    var op = caja.options[caja.selectedIndex];
+    var libres = op && op.dataset.libres ? op.dataset.libres.split(",").filter(Boolean) : [];
+    var actual = puerto.value;
+    puerto.innerHTML = "";
+    puerto.add(new Option(caja.value ? (libres.length ? "Elige el puerto…" : "Caja llena") : "Ninguno", ""));
+    libres.forEach(function (p) { puerto.add(new Option("Puerto " + p, p)); });
+    if (libres.indexOf(actual) >= 0) puerto.value = actual;
+    puerto.disabled = !caja.value;
+    if (window.refrescarSelect) refrescarSelect(puerto);
+  }
+  if (router && red && ip) {
+    router.addEventListener("change", function () { filtrar(); sugerir(); });
+    red.addEventListener("change", sugerir);
+    ip.addEventListener("input", sugerir);
+    filtrar(); sugerir();
+  }
+  if (caja) { caja.addEventListener("change", puertosLibres); puertosLibres(); }
+})();
+</script>
+{% endblock %}

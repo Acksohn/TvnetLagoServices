@@ -1,0 +1,124 @@
+{% extends "panel/base.html" %}
+{% block titulo %}{{ cliente.nombre }}{% endblock %}
+{% block migas %}<a href="{% url 'clientes:lista' %}">Clientes</a><span class="sep">/</span><strong>{{ cliente.nombre }}</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div class="cliente-titulo">
+    <span class="avatar avatar-grande">{{ cliente.nombre|slice:":1"|upper }}</span>
+    <div>
+      <h1>{{ cliente.nombre }}</h1>
+      <p class="sub mono">{{ cliente.usuario_pppoe }} · {{ cliente.ip }}</p>
+    </div>
+  </div>
+  <div class="acciones-fila" id="botones-cliente" data-vivo>
+    {% with c=cliente %}
+      {% include "clientes/_estado.html" %}
+      {% if perms.ServerMikro.change_cliente %}{% include "clientes/_botones.html" with volver="detalle" %}{% endif %}
+    {% endwith %}
+  </div>
+</div>
+
+<div class="rejilla-2">
+  <div class="tarjeta">
+    <div class="tarjeta-titulo">Datos del cliente</div>
+    <dl class="datos">
+      <dt>Nombre</dt><dd>{{ cliente.nombre }}</dd>
+      <dt>Cédula / RUC</dt><dd>{{ cliente.cedula|default:"—" }}</dd>
+      <dt>Teléfono</dt><dd>{% if cliente.telefono %}<a href="tel:{{ cliente.telefono }}">{{ cliente.telefono }}</a>{% else %}—{% endif %}</dd>
+      <dt>Dirección</dt><dd>{{ cliente.direccion|default:"—" }}</dd>
+      <dt>Actualizado</dt><dd>hace {{ cliente.actualizado|timesince }}</dd>
+    </dl>
+  </div>
+
+  <div class="tarjeta">
+    <div class="tarjeta-titulo">Servicio de internet</div>
+    <dl class="datos">
+      <dt>Usuario PPPoE</dt><dd class="mono">{{ cliente.usuario_pppoe }}</dd>
+      <dt>Clave PPPoE</dt><dd class="mono"><span class="oculto" onclick="this.textContent='{{ cliente.clave_pppoe|escapejs }}';this.classList.remove('oculto')" title="Clic para ver">••••••••</span></dd>
+      <dt>IP fija</dt><dd class="mono">{{ cliente.ip }}</dd>
+      <dt>Plan</dt><dd>{% if cliente.plan %}<strong>{{ cliente.plan.nombre }}</strong> <span class="tenue">· ${{ cliente.plan.precio }} al mes</span>{% else %}<span class="tenue">Sin plan asignado</span>{% endif %}</dd>
+      <dt>Velocidad</dt><dd><span class="etiqueta">{{ cliente.velocidad }}</span> <span class="tenue chico">subida/bajada aplicada</span>
+        {% if cliente.plan and cliente.velocidad != cliente.plan.velocidad and cliente.estado != "pendiente" %}
+        <div class="chico" style="color:#9a5b00">El plan dice {{ cliente.plan.velocidad }}: falta aplicarlo en el MikroTik.</div>{% endif %}</dd>
+      <dt>Router</dt><dd>{{ cliente.router.nombre }} <span class="tenue mono">{{ cliente.router.ip }}</span></dd>
+      <dt>Caja NAP</dt><dd>{% if cliente.caja_nap %}<strong>{{ cliente.caja_nap.nombre }}</strong> · puerto <strong>{{ cliente.puerto_nap }}</strong>{% if cliente.caja_nap.coordenadas %} <a class="chico" href="{{ cliente.caja_nap.enlace_mapa }}" target="_blank" rel="noopener">ver en el mapa</a>{% endif %}{% else %}<span class="tenue">Sin caja NAP</span>{% endif %}</dd>
+    </dl>
+    {% if perms.ServerMikro.change_cliente %}
+    <form method="post" action="{% url 'clientes:cambiar_plan' cliente.pk %}" class="cambiar-plan">
+      {% csrf_token %}
+      <label for="id_plan">Cambiar plan</label>
+      <div class="cambiar-plan-fila">
+        {{ form_plan.plan }}
+        <button class="btn btn-primario btn-sm" type="submit" data-cargando="Enviando…"
+                {% if cliente.accion_pendiente %}disabled title="Hay una orden en proceso"{% endif %}>Aplicar</button>
+      </div>
+      <small class="ayuda">{% if cliente.estado == "pendiente" %}Aún no está en el MikroTik: solo se guarda y se creará con esta velocidad.{% else %}Se cambia la cola <span class="mono">q_{{ cliente.usuario_pppoe }}</span> en el MikroTik, por la fila del router. El cliente no se desconecta.{% endif %}</small>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if perms.ServerMikro.change_cliente %}
+<div class="tarjeta separada">
+  <div class="tarjeta-titulo">Caja NAP</div>
+  <form method="post" action="{% url 'clientes:cliente_nap' cliente.pk %}" class="formulario nap-cliente">
+    {% csrf_token %}
+    <div class="rejilla-nap">
+      {% include "clientes/_campo.html" with campo=form_nap.caja_nap %}
+      {% include "clientes/_campo.html" with campo=form_nap.puerto_nap %}
+    </div>
+    <div class="acciones"><button class="btn btn-primario btn-sm" type="submit" data-cargando="Guardando…">Guardar caja NAP</button></div>
+  </form>
+</div>
+<script>
+(function () {
+  var caja = document.querySelector(".nap-cliente [data-nap=caja]");
+  var puerto = document.querySelector(".nap-cliente [data-nap=puerto]");
+  if (!caja || !puerto) return;
+  var inicial = "{{ cliente.puerto_nap|default:'' }}";
+  function libres() {
+    var op = caja.options[caja.selectedIndex];
+    var l = op && op.dataset.libres ? op.dataset.libres.split(",").filter(Boolean) : [];
+    var actual = puerto.value || inicial;
+    puerto.innerHTML = "";
+    puerto.add(new Option(caja.value ? (l.length ? "Elige el puerto…" : "Caja llena") : "Ninguno", ""));
+    l.forEach(function (p) { puerto.add(new Option("Puerto " + p, p)); });
+    if (l.indexOf(actual) >= 0) puerto.value = actual;
+    puerto.disabled = !caja.value;
+    if (window.refrescarSelect) refrescarSelect(puerto);
+  }
+  caja.addEventListener("change", function () { inicial = ""; libres(); });
+  libres();
+})();
+</script>
+{% endif %}
+
+<div class="tarjeta separada">
+  <div class="tarjeta-titulo">Equipo de fibra (ONU)</div>
+  {% if onus %}
+  <div class="tabla-scroll">
+  <table class="tabla">
+    <thead><tr><th>SN</th><th>OLT</th><th>PON : ONT</th><th>Plan OLT</th><th>Estado</th><th>Señal RX</th></tr></thead>
+    <tbody>
+    {% for onu in onus %}
+      <tr>
+        <td class="mono sn">{{ onu.sn }}<div class="tenue chico sans">{{ onu.modelo }}</div></td>
+        <td>{{ onu.olt.nombre }}</td>
+        <td class="mono">{{ onu.fsp }}{% if onu.ont_id is not None %}<span class="tenue">:</span><strong>{{ onu.ont_id }}</strong>{% endif %}</td>
+        <td>{{ onu.plan.nombre|default:"—" }}</td>
+        <td><span class="estado {% if onu.estado == 'activa' %}estado-ok{% else %}estado-gris{% endif %}"><i class="punto"></i>{{ onu.get_estado_display }}</span></td>
+        <td>{% if onu.rx_power is None %}<span class="tenue">— sin dato</span>{% else %}<span class="mono">{{ onu.rx_power|floatformat:2 }} dBm</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="vacio vacio-chico">
+    <strong>Este cliente no tiene ONU asignada</strong>
+    <span>Asígnala al autorizar una ONU en <a href="{% url 'olt:sin_configurar' %}">Sin configurar</a>.</span>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

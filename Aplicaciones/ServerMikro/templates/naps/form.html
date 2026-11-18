@@ -1,0 +1,75 @@
+{% extends "panel/base.html" %}
+{% block titulo %}{% if caja %}Editar {{ caja.nombre }}{% else %}Nueva caja NAP{% endif %}{% endblock %}
+{% block migas %}<a href="{% url 'clientes:naps' %}">Cajas NAP</a><span class="sep">/</span><strong>{% if caja %}{{ caja.nombre }}{% else %}Nueva{% endif %}</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>{% if caja %}Editar caja NAP{% else %}Nueva caja NAP{% endif %}</h1>
+    <p class="sub">Solo se guarda en el sistema.</p>
+  </div>
+</div>
+
+<form method="post" class="formulario-ancho" novalidate autocomplete="off">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="aviso aviso-error"><span>{{ form.non_field_errors|join:" " }}</span></div>{% endif %}
+  <div class="rejilla-2">
+    <div class="tarjeta formulario">
+      <div class="tarjeta-titulo">Caja</div>
+      {% include "clientes/_campo.html" with campo=form.nombre %}
+      <div class="campo {% if form.coordenadas.errors %}con-error{% endif %}">
+        <label for="{{ form.coordenadas.id_for_label }}">{{ form.coordenadas.label }}</label>
+        <div class="fila-boton">{{ form.coordenadas }}
+          <button class="btn btn-fantasma btn-sm" type="button" id="mi-ubicacion" title="Usar la ubicación de este equipo (celular con GPS)">
+            <svg viewBox="0 0 24 24"><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="1.5"/></svg> Mi ubicación</button>
+        </div>
+        <small class="ayuda" id="ayuda-coord">{{ form.coordenadas.help_text }}</small>
+        {% for e in form.coordenadas.errors %}<small class="error">{{ e }}</small>{% endfor %}
+      </div>
+      {% include "clientes/_campo.html" with campo=form.ubicacion %}
+      {% include "clientes/_campo.html" with campo=form.puertos %}
+      {% include "clientes/_campo.html" with campo=form.detalles %}
+      <div class="acciones">
+        {% if caja and perms.ServerMikro.delete_cajanap %}
+        <button class="btn btn-fantasma" type="submit" form="form-eliminar" style="margin-right:auto;color:#b42318">Eliminar</button>
+        {% endif %}
+        <a class="btn btn-fantasma" href="{% url 'clientes:naps' %}">Cancelar</a>
+        <button class="btn btn-primario" type="submit" data-cargando="Guardando…">
+          <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg> Guardar caja</button>
+      </div>
+    </div>
+    {% if caja %}
+    <div class="tarjeta formulario">
+      <div class="tarjeta-titulo">Puertos</div>
+      <dl class="datos">
+        {% for cl in caja.clientes.all|dictsort:"puerto_nap" %}
+          <dt>Puerto {{ cl.puerto_nap }}</dt><dd><a href="{% url 'clientes:detalle' cl.pk %}">{{ cl.nombre }}</a> <span class="tenue mono chico">{{ cl.usuario_pppoe }}</span></dd>
+        {% empty %}
+          <dt>—</dt><dd class="tenue">Ningún cliente conectado todavía</dd>
+        {% endfor %}
+      </dl>
+    </div>
+    {% endif %}
+  </div>
+</form>
+{% if caja %}<form id="form-eliminar" method="post" action="{% url 'clientes:nap_eliminar' caja.pk %}" onsubmit="return confirm('¿Eliminar la caja {{ caja.nombre|escapejs }}?')">{% csrf_token %}</form>{% endif %}
+
+<script>
+(function () {
+  var b = document.getElementById("mi-ubicacion");
+  var campo = document.getElementById("{{ form.coordenadas.id_for_label }}");
+  var ayuda = document.getElementById("ayuda-coord");
+  if (!b || !campo) return;
+  if (!navigator.geolocation) { b.hidden = true; return; }
+  b.addEventListener("click", function () {
+    ayuda.textContent = "Buscando ubicación…";
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      campo.value = pos.coords.latitude.toFixed(6) + "," + pos.coords.longitude.toFixed(6);
+      ayuda.textContent = "Listo (precisión ±" + Math.round(pos.coords.accuracy) + " m).";
+    }, function (e) {
+      ayuda.textContent = "No se pudo leer la ubicación (" + e.message + "). En el celular el panel debe abrirse por https.";
+    }, {enableHighAccuracy: true, timeout: 15000});
+  });
+})();
+</script>
+{% endblock %}

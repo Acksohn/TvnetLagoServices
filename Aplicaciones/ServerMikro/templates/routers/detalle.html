@@ -1,0 +1,115 @@
+{% extends "panel/base.html" %}
+{% block titulo %}{{ router.nombre }}{% endblock %}
+{% block migas %}<a href="{% url 'clientes:routers' %}">Routers MikroTik</a><span class="sep">/</span><strong>{{ router.nombre }}</strong>{% endblock %}
+
+{% block contenido %}
+<div id="ficha-router" data-vivo>
+<div class="cabecera">
+  <div>
+    <h1>{{ router.nombre }}</h1>
+    <p class="sub"><span class="mono">{{ router.ip }}:{{ router.puerto_efectivo }}</span> · {{ router.get_metodo_display }}{% if router.metodo == "api_ssl" and router.huella_ssl %} · <span title="Se comprueba la huella del certificado en cada conexión">🔒 huella fijada</span>{% endif %} · usuario <span class="mono">{{ router.usuario }}</span>{% if router.modelo %} · {{ router.modelo }}{% endif %}</p>
+  </div>
+  <div class="acciones-fila">
+    {% if router.accion_pendiente %}<span class="estado estado-proceso"><i class="giro"></i>Probando conexión…</span>
+    {% elif router.conectado %}<span class="estado estado-ok"><i class="punto"></i>Conectado</span>
+    {% elif router.conectado is False %}<span class="estado estado-error"><i class="punto"></i>Sin conexión</span>
+    {% else %}<span class="estado estado-gris"><i class="punto"></i>Sin probar</span>{% endif %}
+  </div>
+</div>
+
+<div class="tarjeta barra-acciones">
+  <form method="post" action="{% url 'clientes:router_info' router.pk %}">{% csrf_token %}
+    <button class="btn btn-primario btn-sm" type="submit" data-cargando="Enviando…" {% if router.accion_pendiente %}disabled{% endif %}>
+      <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5"/></svg> Probar conexión</button>
+  </form>
+  <a class="btn btn-fantasma btn-sm" href="{% url 'clientes:lista' %}?router={{ router.pk }}">
+    <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5"/></svg> Ver clientes</a>
+  <span class="separador"></span>
+  {% if perms.ServerMikro.change_router %}
+  <a class="btn btn-fantasma btn-sm" href="{% url 'clientes:router_editar' router.pk %}">
+    <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg> Editar</a>
+  {% endif %}
+  {% if perms.ServerMikro.delete_router and not router.total %}
+  <form method="post" action="{% url 'clientes:router_eliminar' router.pk %}" onsubmit="return confirm('¿Eliminar {{ router.nombre|escapejs }} del sistema? El MikroTik no se toca.')">{% csrf_token %}
+    <button class="btn btn-peligro btn-sm" type="submit"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg> Eliminar</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if router.metodo == "api" %}
+<div class="aviso aviso-warning aviso-bloque"><span><strong>Conexión sin cifrar:</strong> con la API 8728 el usuario y la clave viajan en texto plano. Pásalo a <strong>API-SSL</strong> en <em>Editar</em> cuando puedas.</span></div>
+{% endif %}
+{% if sin_worker %}
+<div class="aviso aviso-warning aviso-bloque"><span><strong>La prueba lleva más de 2 minutos en la fila.</strong>
+  ¿Está abierto el worker de <span class="mono">{{ cola }}</span>? El comando está abajo, en <em>Fila de órdenes</em>.</span></div>
+{% elif router.ultimo_error and not router.accion_pendiente %}
+<div class="aviso aviso-error aviso-bloque"><strong>No se pudo conectar:</strong><pre>{{ router.ultimo_error }}</pre>
+  <span class="chico">Revisa en IP → Services que el servicio
+  <span class="mono">{% if router.metodo == "api_ssl" %}api-ssl{% elif router.metodo == "api" %}api{% else %}www-ssl{% endif %}</span>
+  esté activo en el puerto {{ router.puerto_efectivo }}, que su <em>Available From</em> incluya la IP de este servidor, y el usuario y la clave.</span></div>
+{% endif %}
+
+<div class="resumen separada-arriba">
+  <a class="kpi" href="{% url 'clientes:lista' %}?router={{ router.pk }}"><span class="kpi-titulo">Clientes</span><span class="kpi-valor">{{ router.total }}</span></a>
+  <a class="kpi kpi-verde" href="{% url 'clientes:lista' %}?router={{ router.pk }}&estado=activo"><span class="kpi-titulo">Activos</span><span class="kpi-valor">{{ router.activos }}</span></a>
+  <a class="kpi kpi-rojo" href="{% url 'clientes:lista' %}?router={{ router.pk }}&estado=suspendido"><span class="kpi-titulo">Suspendidos</span><span class="kpi-valor">{{ router.suspendidos }}</span></a>
+  <div class="kpi"><span class="kpi-titulo">PPPoE conectados</span><span class="kpi-valor">{% if router.ppp_activos is not None %}{{ router.ppp_activos }}{% else %}—{% endif %}</span><span class="kpi-nota">en la última prueba</span></div>
+</div>
+
+<div class="rejilla-olt">
+  <div class="tarjeta">
+    <div class="tarjeta-titulo">Equipo</div>
+    <dl class="datos">
+      <dt>Modelo</dt><dd>{{ router.modelo|default:"—" }}</dd>
+      <dt>RouterOS</dt><dd class="mono">{{ router.version|default:"—" }}</dd>
+      <dt>Encendido</dt><dd>{% if router.encendido_desde %}hace {{ router.encendido_desde|timesince }}{% else %}—{% endif %}</dd>
+      <dt>CPU</dt><dd>{% if router.cpu is not None %}<div class="medidor"><div class="barra-uso"><i style="width: {{ router.cpu }}%"></i></div><span class="mono">{{ router.cpu }} %</span></div>{% else %}—{% endif %}</dd>
+      <dt>Memoria libre</dt><dd class="mono">{% if router.memoria_libre is not None %}{{ router.memoria_libre }} %{% else %}—{% endif %}</dd>
+      {% if router.metodo == "api_ssl" %}
+      <dt>Certificado</dt><dd>
+        {% if router.huella_vista %}<span class="mono chico huella">{{ router.huella_vista }}</span>
+          {% if router.huella_ssl == router.huella_vista %}<div class="chico" style="color:#12813b">🔒 Fijada: se comprueba en cada conexión</div>
+          {% elif perms.ServerMikro.change_router %}
+          <form method="post" action="{% url 'clientes:router_fijar_huella' router.pk %}" class="en-linea" onsubmit="return confirm('¿Confirmas que esta es la huella del certificado api-ssl de tu MikroTik? Compárala con /certificate print detail.')">{% csrf_token %}
+            <button class="btn btn-fantasma btn-sm" type="submit">Fijar esta huella</button></form>
+          {% endif %}
+        {% else %}<span class="tenue">Se ve tras la primera prueba</span>{% endif %}</dd>
+      {% endif %}
+      <dt>Última prueba</dt><dd>{% if router.info_leida %}hace {{ router.info_leida|timesince }}{% else %}<span class="tenue">Nunca. Pulsa <em>Probar conexión</em>.</span>{% endif %}</dd>
+    </dl>
+    <div class="tarjeta-titulo">Fila de órdenes</div>
+    <div class="caja-comando">
+      <span class="tenue chico">Este router usa la fila <strong class="mono">{{ cola }}</strong>. Su worker se abre así (desde la carpeta del proyecto):</span>
+      <code>py -m celery -A TvnetLagoServices worker -P solo -Q {{ cola }} -n {{ cola }}@%h -l info</code>
+    </div>
+  </div>
+
+  <div class="tarjeta">
+    <div class="tarjeta-titulo">Últimos movimientos de clientes</div>
+    {% if ultimos %}
+    <div class="tabla-scroll">
+    <table class="tabla tabla-compacta">
+      <thead><tr><th>Cliente</th><th>Plan</th><th>Estado</th><th class="der">Cuándo</th></tr></thead>
+      <tbody>
+      {% for c in ultimos %}
+        <tr>
+          <td><a class="enlace-fila" href="{% url 'clientes:detalle' c.pk %}">{{ c.nombre }}</a><div class="tenue chico mono">{{ c.usuario_pppoe }}</div></td>
+          <td>{{ c.plan.nombre|default:c.velocidad }}</td>
+          <td><div class="acciones-fila izq">{% include "clientes/_estado.html" %}</div></td>
+          <td class="der tenue chico">hace {{ c.actualizado|timesince }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="vacio vacio-chico"><strong>Este router todavía no tiene clientes</strong></div>
+    {% endif %}
+    {% if con_error %}
+    <div class="aviso aviso-error aviso-tarjeta"><span><strong>{{ con_error|length }} cliente{{ con_error|length|pluralize }} con la última orden fallida:</strong>
+      {% for c in con_error %}<a href="{% url 'clientes:detalle' c.pk %}">{{ c.nombre }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</span></div>
+    {% endif %}
+  </div>
+</div>
+</div>
+{% endblock %}

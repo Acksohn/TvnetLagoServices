@@ -1,0 +1,64 @@
+{% extends "panel/base.html" %}
+{% block titulo %}{{ red.cidr_texto }}{% endblock %}
+{% block migas %}<a href="{% url 'clientes:redes' %}">Redes IPv4</a><span class="sep">/</span><strong>{{ red.cidr_texto }}</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1 class="mono">{{ red.cidr_texto }}</h1>
+    <p class="sub">{% if red.nombre %}{{ red.nombre }} · {% endif %}Router <a href="{% url 'clientes:router_detalle' red.router_id %}">{{ red.router.nombre }}</a>{% if not red.activa %} · <strong>no se usa para clientes nuevos</strong>{% endif %}</p>
+  </div>
+  {% if perms.ServerMikro.change_redipv4 %}
+  <a class="btn btn-fantasma" href="{% url 'clientes:red_editar' red.pk %}">Editar red</a>
+  {% endif %}
+</div>
+
+<div class="resumen">
+  <div class="kpi"><span class="kpi-titulo">En uso</span><span class="kpi-valor">{{ red.usadas }}</span><span class="kpi-nota">{{ red.porcentaje }}% de {{ red.disponibles }}</span></div>
+  <div class="kpi kpi-verde"><span class="kpi-titulo">Libres</span><span class="kpi-valor">{{ red.libres }}</span></div>
+  <div class="kpi kpi-gris"><span class="kpi-titulo">Gateway y reservadas</span><span class="kpi-valor">{{ red.n_bloqueadas }}</span></div>
+  <div class="kpi"><span class="kpi-titulo">Siguiente IP</span><span class="kpi-valor mono" style="font-size:18px">{{ siguiente|default:"— llena" }}</span></div>
+</div>
+
+{% if ajenos %}
+<div class="aviso aviso-error"><span>{{ ajenos|length }} cliente(s) tienen una IP de esta red pero están en otro router: {% for c in ajenos|slice:":5" %}<a href="{% url 'clientes:detalle' c.pk %}">{{ c.nombre }}</a> ({{ c.router.nombre }}){% if not forloop.last %}, {% endif %}{% endfor %}.</span></div>
+{% endif %}
+
+{% if mapa %}
+<div class="tarjeta">
+  <div class="tarjeta-barra">
+    <strong>Mapa de IPs</strong>
+    <span class="leyenda-ip"><i class="ip-libre"></i>Libre <i class="ip-usada"></i>Cliente <i class="ip-gateway"></i>Gateway <i class="ip-reservada"></i>Reservada</span>
+  </div>
+  <div class="mapa-ip">
+    {% for c in mapa %}
+      {% if c.cliente %}<a class="ip ip-{{ c.tipo }}" href="{% url 'clientes:detalle' c.cliente.pk %}" title="{{ c.ip }} · {{ c.cliente.nombre }}">{{ c.fin }}</a>
+      {% else %}<span class="ip ip-{{ c.tipo }}" title="{{ c.ip }} · {{ c.tipo }}">{{ c.fin }}</span>{% endif %}
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="aviso"><span>La red tiene más de {{ mapa_maximo }} IPs: no se dibuja el mapa, solo la lista de clientes.</span></div>
+{% endif %}
+
+<div class="tarjeta">
+  <div class="tarjeta-barra"><strong>Clientes con IP en esta red</strong><span class="tenue">{{ clientes|length }}</span></div>
+  <div class="tabla-scroll">
+  <table class="tabla">
+    <thead><tr><th>IP</th><th>Cliente</th><th class="ocultar-movil">Router</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for c in clientes %}
+      <tr>
+        <td class="mono">{{ c.ip }}</td>
+        <td><a class="enlace-fila" href="{% url 'clientes:detalle' c.pk %}">{{ c.nombre }}</a></td>
+        <td class="ocultar-movil">{{ c.router.nombre }}</td>
+        <td>{% include "clientes/_estado.html" %}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4"><div class="vacio"><strong>Ningún cliente usa esta red todavía</strong></div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% load static %}<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ingresar · TvnetLago</title>
+  <link rel="stylesheet" href="{% static 'css/panel.css' %}">
+</head>
+<body class="login-fondo">
+  <main class="login">
+    <section class="login-lado">
+      <div class="marca">
+        <span class="marca-logo">TL</span>
+        <div><strong>TvnetLago</strong><small>Panel ISP</small></div>
+      </div>
+      <div class="login-mensaje">
+        <h2>Clientes, MikroTik y fibra en un solo lugar.</h2>
+        <ul>
+          <li>Autoriza ONUs y crea el PPPoE en un paso</li>
+          <li>Suspende y activa clientes al instante</li>
+          <li>Cada orden va en fila: los equipos no se saturan</li>
+        </ul>
+      </div>
+      <small class="login-pie">© {% now "Y" %} TvnetLago</small>
+    </section>
+
+    <section class="login-formulario">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <h1>Ingresar</h1>
+        <p class="sub">Usa tu usuario del sistema.</p>
+
+        {% if form.errors %}
+        <div class="aviso aviso-error"><span>Usuario o clave incorrectos.</span></div>
+        {% endif %}
+        {% if next and user.is_authenticated %}
+        <div class="aviso aviso-warning"><span>Tu usuario no tiene permiso para ver esa página.</span></div>
+        {% endif %}
+
+        <div class="campo">
+          <label for="id_username">Usuario</label>
+          <input type="text" name="username" id="id_username" autocomplete="username" autofocus required
+                 value="{{ form.username.value|default:'' }}">
+        </div>
+        <div class="campo">
+          <label for="id_password">Clave</label>
+          <input type="password" name="password" id="id_password" autocomplete="current-password" required>
+        </div>
+        <input type="hidden" name="next" value="{{ next }}">
+        <button class="btn btn-primario btn-bloque" type="submit" data-cargando="Entrando…">Entrar</button>
+      </form>
+    </section>
+  </main>
+  <script src="{% static 'js/panel.js' %}"></script>
+</body>
+</html>

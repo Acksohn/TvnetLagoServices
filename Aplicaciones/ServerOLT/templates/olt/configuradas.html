@@ -1,0 +1,164 @@
+{% extends "panel/base.html" %}
+{% block titulo %}ONUs configuradas{% endblock %}
+{% block migas %}<span>OLT</span><span class="sep">/</span><strong>ONUs configuradas</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>ONUs configuradas</h1>
+    <p class="sub">Equipos autorizados en las OLTs, con su cliente, plan y señal.</p>
+  </div>
+</div>
+
+<!-- Resumen: cada tarjeta es también un filtro -->
+<div class="resumen" id="resumen" data-vivo>
+  <a class="kpi {% if not estado and not senal %}activo{% endif %}" href="{% querystring estado=None senal=None page=None %}">
+    <span class="kpi-titulo">Total</span>
+    <span class="kpi-valor">{{ resumen.total }}</span>
+  </a>
+  <a class="kpi kpi-verde {% if estado == 'activa' %}activo{% endif %}" href="{% querystring estado='activa' senal=None page=None %}">
+    <span class="kpi-titulo">Activas</span>
+    <span class="kpi-valor">{{ resumen.activas }}</span>
+  </a>
+  <a class="kpi kpi-gris {% if estado == 'suspendida' %}activo{% endif %}" href="{% querystring estado='suspendida' senal=None page=None %}">
+    <span class="kpi-titulo">Suspendidas</span>
+    <span class="kpi-valor">{{ resumen.suspendidas }}</span>
+  </a>
+  <a class="kpi kpi-rojo {% if senal == 'baja' %}activo{% endif %}" href="{% querystring senal='baja' estado=None page=None %}">
+    <span class="kpi-titulo">Señal crítica</span>
+    <span class="kpi-valor">{{ resumen.senal_baja }}</span>
+    <span class="kpi-nota">menor a {{ senal_critica }} dBm</span>
+  </a>
+  {% if resumen.error %}
+  <a class="kpi kpi-rojo {% if estado == 'error' %}activo{% endif %}" href="{% querystring estado='error' senal=None page=None %}">
+    <span class="kpi-titulo">Con error</span>
+    <span class="kpi-valor">{{ resumen.error }}</span>
+  </a>
+  {% endif %}
+</div>
+
+<!-- OLTs -->
+<div class="olts">
+  <a class="olt-chip {% if not olt_id %}activo{% endif %}" href="{% querystring olt=None pon=None page=None %}">
+    <span class="olt-nombre">Todas las OLTs</span>
+  </a>
+  {% for o in olts %}
+  <a class="olt-chip {% if olt_id == o.pk|stringformat:'d' %}activo{% endif %}" href="{% querystring olt=o.pk pon=None page=None %}">
+    <span class="olt-nombre">{{ o.nombre }}</span>
+    <span class="olt-host">{{ o.host }}</span>
+    <span class="olt-num">{{ o.total }}</span>
+  </a>
+  {% endfor %}
+</div>
+
+<div class="tarjeta">
+  <form method="get" class="tarjeta-barra">
+    {% if olt_id %}<input type="hidden" name="olt" value="{{ olt_id }}">{% endif %}
+    {% if estado %}<input type="hidden" name="estado" value="{{ estado }}">{% endif %}
+    {% if senal %}<input type="hidden" name="senal" value="{{ senal }}">{% endif %}
+    <div class="buscador">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input type="search" name="q" value="{{ busqueda }}" placeholder="SN, cliente, usuario PPPoE o descripción">
+    </div>
+    {% if puertos %}
+    <select name="pon" class="select-corto" data-auto-enviar aria-label="Puerto PON">
+      <option value="">Todos los PON</option>
+      {% for p in puertos %}<option value="{{ p }}" {% if p == pon %}selected{% endif %}>PON {{ p }}</option>{% endfor %}
+    </select>
+    {% elif not olt_id %}
+    <span class="tenue pista">Elige una OLT para filtrar por puerto PON</span>
+    {% endif %}
+    {% if busqueda or estado or pon or senal %}
+    <a class="btn btn-fantasma btn-sm" href="{% if olt_id %}?olt={{ olt_id }}{% else %}?{% endif %}">Limpiar filtros</a>
+    {% endif %}
+    <span class="en-vivo" title="La tabla se actualiza sola cada 5 segundos"><i></i>En vivo</span>
+  </form>
+
+  <div id="tabla-configuradas" data-vivo>
+    <div class="tabla-scroll">
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Estado</th>
+          <th>Cliente / descripción</th>
+          <th>SN</th>
+          <th class="ocultar-movil">OLT</th>
+          <th>PON : ONT</th>
+          <th class="ocultar-movil">Plan</th>
+          <th>Señal RX</th>
+          <th class="ocultar-movil ocultar-medio">Actualizado</th>
+          <th class="der"></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for onu in pagina %}
+        <tr>
+          <td>
+            {% if onu.estado == "activa" %}<span class="estado estado-ok"><i class="punto"></i>Activa</span>
+            {% elif onu.estado == "suspendida" %}<span class="estado estado-gris"><i class="punto"></i>Suspendida</span>
+            {% else %}<span class="estado estado-error" title="{{ onu.ultimo_error }}"><i class="punto"></i>{{ onu.get_estado_display }}</span>{% endif %}
+          </td>
+          <td>
+            {% if onu.cliente %}
+              <strong>{{ onu.cliente.nombre }}</strong>
+              <div class="tenue chico">{{ onu.cliente.usuario_pppoe }}{% if onu.descripcion and onu.descripcion != onu.cliente.usuario_pppoe %} · {{ onu.descripcion }}{% endif %}</div>
+            {% else %}
+              <strong>{{ onu.descripcion|default:"Sin cliente" }}</strong>
+              <div class="tenue chico">sin cliente asignado</div>
+            {% endif %}
+          </td>
+          <td class="mono sn"><a class="enlace-fila" href="{% url 'olt:detalle_onu' onu.pk %}">{{ onu.sn }}</a><div class="tenue chico sans">{{ onu.modelo }}</div></td>
+          <td class="ocultar-movil">{{ onu.olt.nombre }}</td>
+          <td class="mono">{{ onu.fsp }}<span class="tenue">:</span><strong>{{ onu.ont_id }}</strong></td>
+          <td class="ocultar-movil">
+            {% if onu.plan %}{{ onu.plan.nombre }}<div class="tenue chico">VLAN {{ onu.vlan_efectiva }}</div>{% else %}<span class="tenue">—</span>{% endif %}
+          </td>
+          <td>
+            {% if onu.rx_power is None %}
+              <span class="senal senal-nada" title="Todavía no se ha leído (llega en el paso de SNMP)">— sin dato</span>
+            {% elif onu.rx_power < senal_critica %}
+              <span class="senal senal-mala">{{ onu.rx_power|floatformat:2 }} dBm</span>
+            {% elif onu.rx_power < senal_debil or onu.rx_power > -8 %}
+              <span class="senal senal-regular">{{ onu.rx_power|floatformat:2 }} dBm</span>
+            {% else %}
+              <span class="senal senal-buena">{{ onu.rx_power|floatformat:2 }} dBm</span>
+            {% endif %}
+          </td>
+          <td class="tenue ocultar-movil ocultar-medio" title="{{ onu.actualizado|date:'d/m/Y H:i:s' }}">hace {{ onu.actualizado|timesince }}</td>
+          <td class="der">{% if onu.accion_pendiente %}<span class="estado estado-proceso"><i class="giro"></i>{{ onu.get_accion_pendiente_display }}…</span>{% else %}<a class="btn btn-fantasma btn-sm" href="{% url 'olt:detalle_onu' onu.pk %}">Ver</a>{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="9">
+            <div class="vacio">
+              <svg viewBox="0 0 24 24" class="icono-gris"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+              {% if busqueda or estado or pon or senal %}
+                <strong>Ninguna ONU coincide con los filtros</strong>
+                <span>Prueba con otra búsqueda o pulsa <em>Limpiar filtros</em>.</span>
+              {% else %}
+                <strong>Todavía no hay ONUs autorizadas</strong>
+                <span>Autorízalas desde <a href="{% url 'olt:sin_configurar' %}">Sin configurar</a>.</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+
+    {% if pagina.paginator.num_pages > 1 %}
+    <div class="paginacion">
+      <span class="tenue">Mostrando {{ pagina.start_index }}–{{ pagina.end_index }} de {{ pagina.paginator.count }}</span>
+      <div class="paginas">
+        {% if pagina.has_previous %}<a class="btn btn-fantasma btn-sm" href="{% querystring page=pagina.previous_page_number %}">‹ Anterior</a>{% endif %}
+        <span class="pagina-actual">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+        {% if pagina.has_next %}<a class="btn btn-fantasma btn-sm" href="{% querystring page=pagina.next_page_number %}">Siguiente ›</a>{% endif %}
+      </div>
+    </div>
+    {% elif pagina.paginator.count %}
+    <div class="paginacion"><span class="tenue">{{ pagina.paginator.count }} ONU{{ pagina.paginator.count|pluralize }}</span></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

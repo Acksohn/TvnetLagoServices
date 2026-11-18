@@ -1,0 +1,58 @@
+{% extends "panel/base.html" %}
+{% block titulo %}Perfiles de velocidad{% endblock %}
+{% block migas %}<span>OLT</span><span class="sep">/</span><strong>Perfiles de velocidad</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>Perfiles de velocidad</h1>
+    <p class="sub">Como los <em>Speed profiles</em> de SmartOLT: en la Huawei son <span class="mono">traffic table ip</span> pegadas al <span class="mono">service-port</span> de cada ONU. El límite real del plan lo sigue poniendo el MikroTik.</p>
+  </div>
+  {% if perms.ServerOLT.add_perfilvelocidad %}
+  <a class="btn btn-primario" href="{% url 'olt:velocidad_nueva' %}?dir={{ direccion }}">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Nuevo perfil
+  </a>
+  {% endif %}
+</div>
+
+<div class="olts">
+  <a class="olt-chip {% if direccion == 'bajada' %}activo{% endif %}" href="?dir=bajada">
+    <span class="olt-nombre">↓ Download (bajada)</span><span class="olt-num">{{ n_bajada }}</span></a>
+  <a class="olt-chip {% if direccion == 'subida' %}activo{% endif %}" href="?dir=subida">
+    <span class="olt-nombre">↑ Upload (subida)</span><span class="olt-num">{{ n_subida }}</span></a>
+</div>
+
+<div class="tarjeta">
+  <div class="tabla-scroll">
+  <table class="tabla">
+    <thead><tr><th>Nombre</th><th>Velocidad</th><th class="ocultar-movil">Nombre en la OLT</th><th class="ocultar-movil">Índice</th><th class="ocultar-movil">Tipo</th><th>ONUs</th><th class="der">Acciones</th></tr></thead>
+    <tbody>
+    {% for p in perfiles %}
+      <tr>
+        <td><strong>{{ p.nombre }}</strong>
+          {% if p.predeterminado %}<span class="etiqueta">Predeterminado</span>{% endif %}</td>
+        <td><strong>{{ p.velocidad_texto }}</strong><div class="tenue chico mono">{{ p.kbps }} kbps</div></td>
+        <td class="mono ocultar-movil">{{ p.nombre_olt }}</td>
+        <td class="mono ocultar-movil">{{ p.indice_olt }}{% if p.creado_en_olt %} <span class="etiqueta etiqueta-gris" title="Ya se creó en al menos una OLT">en OLT</span>{% endif %}</td>
+        <td class="ocultar-movil">{{ p.get_tipo_display }}</td>
+        <td><strong>{{ p.usos }}</strong></td>
+        <td class="der"><div class="acciones-fila">
+          {% if perms.ServerOLT.change_perfilvelocidad %}<a class="btn btn-fantasma btn-sm" href="{% url 'olt:velocidad_editar' p.pk %}">Editar</a>{% endif %}
+          {% if perms.ServerOLT.delete_perfilvelocidad and not p.usos %}
+          <form method="post" action="{% url 'olt:velocidad_eliminar' p.pk %}" onsubmit="return confirm('¿Eliminar el perfil {{ p.nombre|escapejs }}?')">{% csrf_token %}
+            <button class="btn btn-fantasma btn-sm texto-peligro" type="submit">Eliminar</button>
+          </form>
+          {% endif %}
+        </div></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7"><div class="vacio">
+        <svg viewBox="0 0 24 24" class="icono-gris"><path d="M4 18a8 8 0 1 1 16 0M12 18l4-6"/></svg>
+        <strong>No hay perfiles de {{ direccion }}</strong><span>Sin perfiles, las ONUs se autorizan sin límite en la OLT (traffic table 6), como hasta ahora.</span>
+      </div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

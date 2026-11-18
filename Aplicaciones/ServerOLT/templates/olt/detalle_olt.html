@@ -1,0 +1,125 @@
+{% extends "panel/base.html" %}
+{% block titulo %}{{ olt.nombre }}{% endblock %}
+{% block migas %}<a href="{% url 'olt:olts' %}">OLTs</a><span class="sep">/</span><strong>{{ olt.nombre }}</strong>{% endblock %}
+
+{% block contenido %}
+<div id="ficha-olt" data-vivo>
+<div class="cabecera">
+  <div>
+    <h1>{{ olt.nombre }}</h1>
+    <p class="sub"><span class="mono">{{ olt.host }}:{{ olt.puerto_ssh }}</span> · {{ olt.get_protocolo_display }}
+      {% if olt.modelo_equipo %}· {{ olt.modelo_equipo }}{% endif %}
+      {% if olt.solo_lectura %}· <span class="etiqueta etiqueta-gris">Solo lectura</span>{% endif %}
+      {% if not olt.activa %}· <span class="etiqueta etiqueta-gris">Inactiva</span>{% endif %}</p>
+  </div>
+  <div class="acciones-fila">
+    {% if olt.accion_pendiente %}<span class="estado estado-proceso"><i class="giro"></i>{{ olt.get_accion_pendiente_display }}…</span>
+    {% elif olt.conectada %}<span class="estado estado-ok"><i class="punto"></i>Conectada</span>
+    {% elif olt.conectada is False %}<span class="estado estado-error"><i class="punto"></i>Sin conexión</span>
+    {% else %}<span class="estado estado-gris"><i class="punto"></i>Sin probar</span>{% endif %}
+  </div>
+</div>
+{% include "olt/_pestanas_olt.html" with pestana="detalles" %}
+
+<div class="tarjeta barra-acciones">
+  <form method="post" action="{% url 'olt:info_olt' olt.pk %}">{% csrf_token %}
+    <button class="btn btn-primario btn-sm" type="submit" data-cargando="Enviando…" {% if olt.accion_pendiente %}disabled{% endif %}>
+      <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5"/></svg> Actualizar info</button>
+  </form>
+  {% if perms.ServerOLT.change_onu and olt.activa %}
+  <form method="post" action="{% url 'olt:buscar' olt.pk %}">{% csrf_token %}
+    <button class="btn btn-fantasma btn-sm" type="submit" data-cargando="Enviando…">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg> Buscar ONUs nuevas</button>
+  </form>
+  {% endif %}
+  <a class="btn btn-fantasma btn-sm" href="{% url 'olt:configuradas' %}?olt={{ olt.pk }}">
+    <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg> Ver ONUs</a>
+  <span class="separador"></span>
+  {% if perms.ServerOLT.change_olt %}
+  <a class="btn btn-fantasma btn-sm" href="{% url 'olt:olt_editar' olt.pk %}">
+    <svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg> Editar</a>
+  {% endif %}
+</div>
+
+{% if sin_worker %}
+<div class="aviso aviso-warning aviso-bloque"><span><strong>La orden lleva más de 2 minutos en la fila.</strong>
+  ¿Está abierto el worker de <span class="mono">{{ cola }}</span>? Mira el comando abajo, en <em>Fila de órdenes</em>.</span>
+  {% if perms.ServerOLT.change_olt %}<form method="post" action="{% url 'olt:olt_liberar' olt.pk %}" style="margin-top:8px">{% csrf_token %}
+    <input type="hidden" name="volver" value="{{ request.get_full_path }}">
+    <button class="btn btn-fantasma btn-sm" type="submit">Cancelar esta orden</button>
+    <span class="chico tenue">Si no haces nada, a los 5 minutos se marca como fallida sola.</span></form>{% endif %}
+</div>
+{% elif olt.ultimo_error and not olt.accion_pendiente %}
+<div class="aviso aviso-error aviso-bloque"><strong>La última orden falló:</strong><pre>{{ olt.ultimo_error }}</pre>
+  <span class="chico">Revisa: IP y puerto, que la regla dst-nat del MikroTik deje pasar la IP de la oficina, usuario y clave, y que nadie más tenga la sesión ocupada con ese usuario.</span></div>
+{% endif %}
+
+<div class="resumen separada-arriba">
+  <a class="kpi" href="{% url 'olt:configuradas' %}?olt={{ olt.pk }}"><span class="kpi-titulo">ONUs configuradas</span><span class="kpi-valor">{{ olt.total }}</span></a>
+  <a class="kpi kpi-verde" href="{% url 'olt:configuradas' %}?olt={{ olt.pk }}&estado=activa"><span class="kpi-titulo">Activas</span><span class="kpi-valor">{{ olt.activas }}</span></a>
+  <a class="kpi kpi-naranja" href="{% url 'olt:sin_configurar' %}?olt={{ olt.pk }}"><span class="kpi-titulo">Sin configurar</span><span class="kpi-valor">{{ olt.pendientes }}</span><span class="kpi-nota">detectadas por autofind</span></a>
+  <a class="kpi kpi-rojo" href="{% url 'olt:configuradas' %}?olt={{ olt.pk }}&senal=baja"><span class="kpi-titulo">Señal crítica</span><span class="kpi-valor">{{ olt.criticas }}</span><span class="kpi-nota">menor a {{ senal_critica }} dBm{% if olt.fuera %} · {{ olt.fuera }} fuera de línea{% endif %}</span></a>
+</div>
+
+<div class="rejilla-olt">
+  <div class="tarjeta">
+    <div class="tarjeta-titulo">Equipo</div>
+    <dl class="datos">
+      <dt>Modelo</dt><dd>{{ olt.modelo_equipo|default:"—" }}</dd>
+      <dt>Versión</dt><dd class="mono">{{ olt.version|default:"—" }}</dd>
+      <dt>Encendida</dt><dd>{% if olt.encendida_desde %}hace {{ olt.encendida_desde|timesince }}{% else %}—{% endif %}</dd>
+      <dt>Última lectura</dt><dd>{% if olt.info_leida %}hace {{ olt.info_leida|timesince }}{% else %}<span class="tenue">Nunca. Pulsa <em>Actualizar info</em>.</span>{% endif %}</dd>
+      <dt>SNMP</dt><dd class="mono">{% if olt.snmp_comunidad %}puerto {{ olt.snmp_puerto }}{% else %}<span class="tenue sans">sin configurar</span>{% endif %}</dd>
+    </dl>
+    <div class="tarjeta-titulo">Fila de órdenes</div>
+    <div class="caja-comando">
+      <span class="tenue chico">Esta OLT usa la fila <strong class="mono">{{ cola }}</strong>. Su worker se abre así (desde la carpeta del proyecto):</span>
+      <code>py -m celery -A TvnetLagoServices worker -P solo -Q {{ cola }} -n {{ cola }}@%h -l info</code>
+    </div>
+  </div>
+
+  <div class="tarjeta">
+    <div class="tarjeta-titulo">Tarjetas <span class="tenue chico">· display board 0</span></div>
+    {% if tarjetas %}
+    <div class="tabla-scroll">
+    <table class="tabla tabla-compacta">
+      <thead><tr><th>Slot</th><th>Tarjeta</th><th>Tipo</th><th>Estado</th><th class="der">ONUs</th></tr></thead>
+      <tbody>
+      {% for t in tarjetas %}
+        <tr>
+          <td class="mono">0/{{ t.slot }}</td>
+          <td class="mono"><strong>{{ t.nombre }}</strong></td>
+          <td>{% if t.tipo == "GPON" %}<span class="etiqueta">GPON · {{ t.puertos }} PON</span>{% else %}<span class="etiqueta etiqueta-gris">{{ t.tipo }}</span>{% endif %}</td>
+          <td>{% if "ormal" in t.estado %}<span class="estado estado-ok"><i class="punto"></i>{{ t.estado }}</span>{% else %}<span class="estado estado-error"><i class="punto"></i>{{ t.estado }}</span>{% endif %}</td>
+          <td class="der mono">{% if t.tipo == "GPON" %}{{ t.onus }}{% else %}<span class="tenue">—</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="vacio vacio-chico"><strong>Todavía no se han leído las tarjetas</strong><span>Pulsa <em>Actualizar info</em>: se lee con <span class="mono">display board 0</span>, sin cambiar nada.</span></div>
+    {% endif %}
+  </div>
+</div>
+
+
+<!-- Paso 18: perfiles que tiene la OLT (se leen con "Actualizar info") -->
+<div class="tarjeta separada-arriba">
+  <div class="tarjeta-barra"><strong>Perfiles de la OLT</strong>
+    {% if olt.perfiles.leidos %}<span class="tenue chico">leídos {{ olt.perfiles.leidos|slice:":10" }} {{ olt.perfiles.leidos|slice:"11:16" }}</span>{% endif %}</div>
+  {% if olt.perfiles.leidos %}
+  <div class="formulario">
+    <details><summary><strong>ont-lineprofile</strong> · cómo habla la ONU con la OLT por la fibra (T-CONT, GEM, VLAN)</summary>
+      <pre class="caja-pre">{{ olt.perfiles.lineprofiles }}</pre></details>
+    <details><summary><strong>ont-srvprofile</strong> · qué puertos y VLAN ofrece la ONU del lado del cliente</summary>
+      <pre class="caja-pre">{{ olt.perfiles.srvprofiles }}</pre></details>
+    <details><summary><strong>traffic table ip</strong> · velocidades (las TVN_… son las del sistema)</summary>
+      <pre class="caja-pre">{{ olt.perfiles.traffic }}</pre></details>
+  </div>
+  {% else %}
+  <div class="vacio vacio-chico"><strong>Todavía no se han leído</strong><span>Pulsa <em>Actualizar info</em> y aquí verás los line/srv profiles y las traffic tables de la OLT, para saber qué números poner en los <a href="{% url 'olt:planes_olt' %}">Planes OLT</a>.</span></div>
+  {% endif %}
+</div>
+</div>
+{% endblock %}

@@ -1,0 +1,56 @@
+<div class="tabla-scroll">
+<table class="tabla">
+  <thead>
+    <tr>
+      <th class="ocultar-movil">OLT</th>
+      <th class="ocultar-movil">Tipo</th>
+      <th class="ocultar-movil">Tarjeta</th>
+      <th>PON</th>
+      <th>SN</th>
+      <th class="ocultar-movil">Modelo</th>
+      <th class="ocultar-movil">Visto</th>
+      <th class="der">Acción</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for onu in onus %}
+    <tr class="{% if onu.ultimo_error %}fila-error{% endif %}">
+      <td class="ocultar-movil"><strong>{{ onu.olt.nombre }}</strong></td>
+      <td class="ocultar-movil"><span class="etiqueta">GPON</span></td>
+      <td class="mono ocultar-movil">{{ onu.frame }}/{{ onu.slot }}</td>
+      <td class="mono">{{ onu.fsp }}</td>
+      <td class="mono sn">{{ onu.sn }}</td>
+      <td class="ocultar-movil">{{ onu.modelo|default:"—" }}</td>
+      <td class="tenue ocultar-movil" title="{{ onu.actualizado|date:'d/m/Y H:i:s' }}">hace {{ onu.actualizado|timesince }}</td>
+      <td class="der"><div class="acciones-fila">
+        {% if onu.olt.solo_lectura %}
+          <span class="estado estado-gris" title="Esta OLT la maneja otro sistema">Solo lectura</span>
+        {% elif onu.estado == "autorizando" and not onu.autorizando_trabada %}
+          <span class="estado estado-proceso"><i class="giro"></i>Autorizando…</span>
+        {% else %}
+          {% if onu.ultimo_error %}
+          <details class="error-detalle">
+            <summary class="estado estado-error">Falló</summary>
+            <pre>{{ onu.ultimo_error }}</pre>
+          </details>
+          {% endif %}
+          <a class="btn btn-exito btn-sm" href="{% url 'olt:autorizar' onu.pk %}">
+            {% if onu.ultimo_error %}Reintentar{% else %}Autorizar{% endif %}
+          </a>
+        {% endif %}
+      </div></td>
+    </tr>
+  {% empty %}
+    <tr>
+      <td colspan="8">
+        <div class="vacio">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+          <strong>No hay ONUs pendientes</strong>
+          <span>Conecta una ONU nueva y pulsa <em>Buscar</em>. Aparecerá aquí en unos segundos.</span>
+        </div>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>

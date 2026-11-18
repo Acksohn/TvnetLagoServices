@@ -1,0 +1,45 @@
+{% extends "panel/base.html" %}
+{% block titulo %}{% if router %}Editar {{ router.nombre }}{% else %}Agregar router{% endif %}{% endblock %}
+{% block migas %}<a href="{% url 'clientes:routers' %}">Routers MikroTik</a><span class="sep">/</span><strong>{% if router %}{{ router.nombre }}{% else %}Nuevo{% endif %}</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>{% if router %}Editar router{% else %}Agregar router{% endif %}</h1>
+    <p class="sub">Datos para que el worker entre al MikroTik (API-SSL, API o REST). La página nunca se conecta: solo guarda.</p>
+  </div>
+</div>
+
+<form method="post" class="formulario-ancho" novalidate autocomplete="off">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="aviso aviso-error"><span>{{ form.non_field_errors|join:" " }}</span></div>{% endif %}
+  <div class="rejilla-2">
+    <div class="tarjeta formulario">
+      <div class="tarjeta-titulo">Conexión</div>
+      {% for campo in form %}{% include "clientes/_campo.html" %}{% endfor %}
+      <div class="acciones">
+        <a class="btn btn-fantasma" href="{% if router %}{% url 'clientes:router_detalle' router.pk %}{% else %}{% url 'clientes:routers' %}{% endif %}">Cancelar</a>
+        <button class="btn btn-primario" type="submit" data-cargando="Guardando…">
+          <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg> Guardar router</button>
+      </div>
+    </div>
+    <div class="tarjeta formulario">
+      <div class="tarjeta-titulo">Antes de guardar, en el MikroTik (API-SSL)</div>
+      <div class="pasos">
+        <p>1. Certificado propio y servicio <span class="mono">api-ssl</span>, solo para la IP del servidor:</p>
+        <code>/certificate add name=ca-local common-name=ca-local key-usage=key-cert-sign,crl-sign
+/certificate sign ca-local
+/certificate add name=api-ssl common-name=api-ssl
+/certificate sign api-ssl ca=ca-local
+/ip service set api-ssl certificate=api-ssl port=8729 address=IP_DEL_SERVIDOR disabled=no</code>
+        <p>2. Un usuario solo para el sistema (no el <span class="mono">admin</span> ni el de MikroWisp):</p>
+        <code>/user group add name=django policy=read,write,api,!winbox,!web,!ssh,!ftp,!telnet
+/user add name=django-api group=django address=IP_DEL_SERVIDOR password=CLAVE_LARGA</code>
+        <p>3. (Opcional, más seguro) Copia la huella del certificado y pégala en <em>Huella SHA-256</em>:</p>
+        <code>/certificate print detail where name=api-ssl</code>
+        <p class="tenue chico">Busca la línea <span class="mono">fingerprint=</span>. Con la huella guardada, el sistema solo se conecta a ese MikroTik; si el certificado cambia, se corta y te avisa.</p>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

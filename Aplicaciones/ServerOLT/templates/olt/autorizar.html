@@ -1,0 +1,162 @@
+{% extends "panel/base.html" %}
+{% block titulo %}Autorizar {{ onu.sn }}{% endblock %}
+{% block migas %}<span>OLT</span><span class="sep">/</span><a href="{% url 'olt:sin_configurar' %}">Sin configurar</a><span class="sep">/</span><strong>Autorizar</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>Autorizar ONU</h1>
+    <p class="sub">Se pondrá en la fila de <strong>{{ onu.olt.nombre }}</strong>. El worker hará el <code>ont add</code> y el <code>service-port</code>, y si el cliente está Pendiente, creará su PPPoE en el MikroTik.</p>
+  </div>
+</div>
+
+<div class="rejilla-2">
+  <!-- Datos que vienen de la OLT (solo lectura) -->
+  <div class="tarjeta">
+    <div class="tarjeta-titulo">Datos detectados</div>
+    <dl class="datos">
+      <dt>SN</dt><dd class="mono sn">{{ onu.sn }}</dd>
+      <dt>OLT</dt><dd>{{ onu.olt.nombre }} <span class="tenue">({{ onu.olt.host }})</span></dd>
+      <dt>Tipo</dt><dd><span class="etiqueta">GPON</span></dd>
+      <dt>Tarjeta / Puerto</dt><dd class="mono">{{ onu.fsp }}</dd>
+      <dt>Modelo</dt><dd>{{ onu.modelo|default:"—" }}</dd>
+      <dt>Detectada</dt><dd>hace {{ onu.actualizado|timesince }}</dd>
+    </dl>
+    {% if onu.ultimo_error %}
+    <div class="aviso aviso-error aviso-bloque">
+      <strong>El intento anterior falló:</strong>
+      <pre>{{ onu.ultimo_error }}</pre>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Lo que elige el técnico -->
+  <form method="post" class="tarjeta formulario" novalidate>
+    {% csrf_token %}
+    <div class="tarjeta-titulo">Configuración</div>
+    {% if form.non_field_errors %}<div class="aviso aviso-error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+
+    {% if form.sin_perfiles %}
+    <div class="aviso aviso-warning"><span>Todavía no se han leído los perfiles de {{ onu.olt.nombre }}.
+      Ve a <a href="{% url 'olt:perfiles_ont' onu.olt_id %}" target="_blank">OLT → Perfiles</a> y pulsa <em>Leer perfiles de la OLT</em>,
+      así aquí salen por nombre. Mientras tanto puedes usar un preset.</span></div>
+    {% endif %}
+    {% include "clientes/_campo.html" with campo=form.plan %}
+    <div class="campos-2">
+      {% include "clientes/_campo.html" with campo=form.lineprofile_id %}
+      {% include "clientes/_campo.html" with campo=form.srvprofile_id %}
+    </div>
+    <div class="campo" style="margin-top:-6px"><small class="ayuda" id="info-line"></small></div>
+    <div class="campo {% if form.modo.errors %}con-error{% endif %}">
+      <label>ONU mode <span class="req">*</span></label>
+      <div class="opciones-modo">
+        {% for r in form.modo %}<label class="opcion-modo">{{ r.tag }}<span>{% if r.data.value == "routing" %}<strong>Routing</strong><small>La ONU marca el PPPoE del cliente</small>{% else %}<strong>Bridging</strong><small>El router del cliente marca el PPPoE</small>{% endif %}</span></label>{% endfor %}
+      </div>
+      <small class="ayuda" id="ayuda-modo"></small>
+      {% for e in form.modo.errors %}<small class="error">{{ e }}</small>{% endfor %}
+    </div>
+    {% include "clientes/_campo.html" with campo=form.vlan %}
+    <div class="campo" style="margin-top:-6px"><small class="error" id="aviso-vlan"></small></div>
+    <div class="campos-2">
+      {% include "clientes/_campo.html" with campo=form.vel_bajada %}
+      {% include "clientes/_campo.html" with campo=form.vel_subida %}
+    </div>
+    <div class="campo {% if form.cliente.errors %}con-error{% endif %}">
+      <label for="{{ form.cliente.id_for_label }}">Cliente <span class="req">*</span></label>
+      {{ form.cliente }}
+      <small class="ayuda" id="ayuda-cliente">Escribe para buscar. Solo salen clientes sin ONU. Si está <em>Pendiente</em>, se crea también en el MikroTik. ¿No está? <a href="{% url 'clientes:nuevo' %}" target="_blank">Crear cliente nuevo</a> y vuelve a buscarlo.</small>
+      {% for e in form.cliente.errors %}<small class="error">{{ e }}</small>{% endfor %}
+    </div>
+    <div class="rejilla-nap">
+      {% include "clientes/_campo.html" with campo=form.caja_nap %}
+      {% include "clientes/_campo.html" with campo=form.puerto_nap %}
+    </div>
+    {% include "clientes/_campo.html" with campo=form.descripcion %}
+
+    <div class="acciones">
+      <a class="btn btn-fantasma" href="{% url 'olt:sin_configurar' %}?olt={{ onu.olt_id }}">Cancelar</a>
+      <button class="btn btn-exito" type="submit" data-cargando="Enviando a la fila…">
+        <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+        Autorizar ONU
+      </button>
+    </div>
+  </form>
+</div>
+{{ form.presets|json_script:"presets" }}
+{{ form.info_line|json_script:"info-lines" }}
+<script>
+/* Paso 21: preset (Plan OLT) que llena los campos, y lo que deja pasar cada line-profile. */
+(function () {
+  var presets = JSON.parse(document.getElementById("presets").textContent);
+  var lines = JSON.parse(document.getElementById("info-lines").textContent);
+  var plan = document.getElementById("{{ form.plan.id_for_label }}");
+  var line = document.getElementById("{{ form.lineprofile_id.id_for_label }}");
+  var srv = document.getElementById("{{ form.srvprofile_id.id_for_label }}");
+  var vlan = document.getElementById("{{ form.vlan.id_for_label }}");
+  var info = document.getElementById("info-line"), aviso = document.getElementById("aviso-vlan");
+  function poner(sel, valor) {
+    if (valor === null || valor === undefined) return;
+    if (!Array.from(sel.options).some(function (o) { return o.value === String(valor); })) sel.add(new Option(String(valor), valor));
+    sel.value = String(valor);
+    if (window.refrescarSelect) refrescarSelect(sel);
+  }
+  function revisar() {
+    var d = lines[line.value];
+    if (!line.value) { info.textContent = ""; aviso.textContent = ""; return; }
+    if (!d || !d.leido) { info.textContent = "GEM port: el del preset (o 1). Lee los perfiles de la OLT para ver qué VLANs deja pasar."; aviso.textContent = ""; return; }
+    var porVlan = !d.modo || d.modo.indexOf("vlan") >= 0;
+    info.textContent = "GEM port " + d.gem + " · " + (porVlan ? (d.vlans.length ? "deja pasar las VLANs " + d.vlans.join(", ") : "sin VLANs fijas") : "mapeo por " + d.modo + " (cualquier VLAN)");
+    var v = parseInt(vlan.value, 10);
+    if (vlan.closest(".con-error")) { aviso.textContent = ""; return; }  // ya lo dice el servidor
+    aviso.textContent = (v && porVlan && d.vlans.length && d.vlans.indexOf(v) < 0)
+      ? "Ojo: este line-profile no deja pasar la VLAN " + v + ". La ONU no navegaría." : "";
+  }
+  plan.addEventListener("change", function () {
+    var p = presets[plan.value]; if (!p) return;
+    poner(line, p.line); poner(srv, p.srv); poner(vlan, p.vlan); revisar();
+  });
+  line.addEventListener("change", revisar); vlan.addEventListener("change", revisar);
+  revisar();
+})();
+</script>
+<script>
+/* Paso 17: puertos libres de la caja elegida, y avisos según ONU mode y cliente. */
+(function () {
+  var caja = document.querySelector("[data-nap=caja]");
+  var puerto = document.querySelector("[data-nap=puerto]");
+  var cliente = document.getElementById("{{ form.cliente.id_for_label }}");
+  var ayudaModo = document.getElementById("ayuda-modo");
+  var ayudaCliente = document.getElementById("ayuda-cliente");
+  var textoCliente = ayudaCliente.innerHTML;
+  function puertosLibres() {
+    var op = caja.options[caja.selectedIndex];
+    var libres = op && op.dataset.libres ? op.dataset.libres.split(",").filter(Boolean) : [];
+    var actual = puerto.value;
+    puerto.innerHTML = "";
+    puerto.add(new Option(caja.value ? (libres.length ? "Elige el puerto…" : "Caja llena") : "Ninguno", ""));
+    libres.forEach(function (p) { puerto.add(new Option("Puerto " + p, p)); });
+    if (libres.indexOf(actual) >= 0) puerto.value = actual;
+    puerto.disabled = !caja.value;
+    if (window.refrescarSelect) refrescarSelect(puerto);
+  }
+  function avisos() {
+    var modo = (document.querySelector("input[name=modo]:checked") || {}).value;
+    if (modo === "routing") {
+      ayudaModo.textContent = cliente.value
+        ? "Se configura la WAN PPPoE en la ONU con el usuario y la clave del cliente."
+        : "Elige el cliente: su usuario y clave PPPoE se configuran en la ONU.";
+    } else {
+      ayudaModo.textContent = "Se pone la User VLAN en el puerto LAN 1 de la ONU.";
+    }
+  }
+  if (caja && puerto) { caja.addEventListener("change", puertosLibres); puertosLibres(); }
+  document.querySelectorAll("input[name=modo]").forEach(function (r) { r.addEventListener("change", avisos); });
+  cliente.addEventListener("change", function () {
+    avisos();
+    var nap = cliente.dataset.nap || "";
+    ayudaCliente.innerHTML = nap ? "Este cliente ya está en " + nap + ". Si eliges otra caja, se cambia." : textoCliente;
+  });
+  avisos();
+})();
+</script>
+{% endblock %}

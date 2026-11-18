@@ -1,0 +1,43 @@
+{% extends "panel/base.html" %}
+{% block titulo %}{% if red %}Editar {{ red.cidr_texto }}{% else %}Nueva red IPv4{% endif %}{% endblock %}
+{% block migas %}<a href="{% url 'clientes:redes' %}">Redes IPv4</a><span class="sep">/</span><strong>{% if red %}{{ red.cidr_texto }}{% else %}Nueva{% endif %}</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>{% if red %}Editar red{% else %}Nueva red IPv4{% endif %}</h1>
+    <p class="sub">Solo se guarda en el sistema: el MikroTik no se toca.</p>
+  </div>
+</div>
+
+<form method="post" class="formulario-ancho" novalidate autocomplete="off">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="aviso aviso-error"><span>{{ form.non_field_errors|join:" " }}</span></div>{% endif %}
+  <div class="rejilla-2">
+    <div class="tarjeta formulario">
+      <div class="tarjeta-titulo">Red</div>
+      {% for campo in form %}{% include "clientes/_campo.html" %}{% endfor %}
+      <div class="acciones">
+        {% if red and perms.ServerMikro.delete_redipv4 %}
+        <button class="btn btn-fantasma" type="submit" form="form-eliminar" style="margin-right:auto;color:#b42318">Eliminar</button>
+        {% endif %}
+        <a class="btn btn-fantasma" href="{% if red %}{% url 'clientes:red_detalle' red.pk %}{% else %}{% url 'clientes:redes' %}{% endif %}">Cancelar</a>
+        <button class="btn btn-primario" type="submit" data-cargando="Guardando…">
+          <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg> Guardar red</button>
+      </div>
+    </div>
+    <div class="tarjeta formulario">
+      <div class="tarjeta-titulo">Cómo llenarlo</div>
+      <div class="pasos">
+        <p><strong>Red y CIDR:</strong> la misma que tienes en MikroWisp, por ejemplo <span class="mono">172.16.130.0</span> y <span class="mono">24</span> (puedes escribir <span class="mono">172.16.130.0/24</span> en Red).</p>
+        <p><strong>Gateway:</strong> la IP del MikroTik para esos clientes. Míralo en un cliente que ya funciona:</p>
+        <code>/ppp secret print detail where name="usuario_del_cliente"
+/ppp profile print detail</code>
+        <p class="tenue chico">Si el secret o su perfil tienen <span class="mono">local-address=172.16.130.1</span>, ese es el gateway. Si lo dejas vacío, el MikroTik usa el del perfil <span class="mono">default</span>.</p>
+        <p><strong>Reservadas:</strong> IPs que no quieres repartir (equipos, antenas, servidores).</p>
+      </div>
+    </div>
+  </div>
+</form>
+{% if red %}<form id="form-eliminar" method="post" action="{% url 'clientes:red_eliminar' red.pk %}" onsubmit="return confirm('¿Eliminar la red {{ red.cidr_texto }}? Los clientes no se tocan.')">{% csrf_token %}</form>{% endif %}
+{% endblock %}

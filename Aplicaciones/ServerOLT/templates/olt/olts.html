@@ -1,0 +1,86 @@
+{% extends "panel/base.html" %}
+{% block titulo %}OLTs{% endblock %}
+{% block migas %}<span>OLT</span><span class="sep">/</span><strong>OLTs</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>OLTs</h1>
+    <p class="sub">Tus equipos de fibra: conexión, tarjetas y ONUs. Cada OLT tiene su propia fila de órdenes.</p>
+  </div>
+  {% if perms.ServerOLT.add_olt %}
+  <a class="btn btn-primario" href="{% url 'olt:olt_nueva' %}">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Agregar OLT
+  </a>
+  {% endif %}
+</div>
+
+<div id="olts-vivo" data-vivo>
+<div class="resumen">
+  <div class="kpi"><span class="kpi-titulo">OLTs</span><span class="kpi-valor">{{ resumen.olts }}</span></div>
+  <div class="kpi kpi-verde"><span class="kpi-titulo">Conectadas</span><span class="kpi-valor">{{ resumen.conectadas }}</span><span class="kpi-nota">en la última lectura</span></div>
+  <div class="kpi kpi-rojo"><span class="kpi-titulo">Sin conexión</span><span class="kpi-valor">{{ resumen.sin_conexion }}</span></div>
+  <a class="kpi" href="{% url 'olt:configuradas' %}"><span class="kpi-titulo">ONUs configuradas</span><span class="kpi-valor">{{ resumen.onus }}</span></a>
+</div>
+
+<div class="tarjeta">
+  <div class="tarjeta-barra">
+    <strong>Equipos</strong>
+    <span class="en-vivo" title="Se actualiza sola cada 5 segundos"><i></i>En vivo</span>
+  </div>
+  <div class="tabla-scroll">
+  <table class="tabla">
+    <thead><tr>
+      <th>OLT</th><th class="ocultar-movil">Equipo</th><th>Conexión</th>
+      <th>ONUs</th><th class="ocultar-movil">Sin configurar</th><th class="ocultar-movil ocultar-medio">Fila</th><th class="der">Acciones</th>
+    </tr></thead>
+    <tbody>
+    {% for o in olts %}
+      <tr {% if not o.activa %}class="fila-apagada"{% endif %}>
+        <td>
+          <a class="enlace-fila" href="{% url 'olt:detalle_olt' o.pk %}">{{ o.nombre }}</a>
+          <div class="tenue chico mono">{{ o.host }}:{{ o.puerto_ssh }} · {{ o.get_protocolo_display }}</div>
+          <div class="etiquetas-fila">
+            {% if o.solo_lectura %}<span class="etiqueta etiqueta-gris">Solo lectura</span>{% endif %}
+            {% if not o.activa %}<span class="etiqueta etiqueta-gris">Inactiva</span>{% endif %}
+          </div>
+        </td>
+        <td class="ocultar-movil">{% if o.modelo_equipo %}<strong>{{ o.modelo_equipo }}</strong><div class="tenue chico mono">{{ o.version }}</div>{% else %}<span class="tenue">— sin leer</span>{% endif %}</td>
+        <td>
+          {% if o.accion_pendiente %}
+            <span class="estado estado-proceso"><i class="giro"></i>Leyendo…</span>
+            {% if o.sin_worker %}<div class="chico" style="color:#b42318">¿Sin worker en {{ o.cola }}?</div>{% endif %}
+          {% elif o.conectada %}<span class="estado estado-ok"><i class="punto"></i>Conectada</span><div class="tenue chico">hace {{ o.info_leida|timesince }}</div>
+          {% elif o.conectada is False %}<span class="estado estado-error"><i class="punto"></i>Sin conexión</span><div class="tenue chico">hace {{ o.info_leida|default:o.accion_desde|timesince }}</div>
+          {% else %}<span class="estado estado-gris"><i class="punto"></i>Sin probar</span>{% endif %}
+        </td>
+        <td>
+          <div class="cifras">
+            <a href="{% url 'olt:configuradas' %}?olt={{ o.pk }}" title="Configuradas"><strong>{{ o.total }}</strong></a>
+            <span class="cifra-verde" title="Activas">{{ o.activas }} activas</span>
+            {% if o.fuera %}<span class="cifra-roja" title="Fuera de línea en la última lectura">{{ o.fuera }} fuera</span>{% endif %}
+            {% if o.criticas %}<a class="cifra-roja" href="{% url 'olt:configuradas' %}?olt={{ o.pk }}&senal=baja" title="Señal menor a -27 dBm">{{ o.criticas }} señal crítica</a>{% endif %}
+          </div>
+        </td>
+        <td class="ocultar-movil">{% if o.pendientes %}<a class="etiqueta num-naranja" href="{% url 'olt:sin_configurar' %}?olt={{ o.pk }}">{{ o.pendientes }} por autorizar</a>{% else %}<span class="tenue">0</span>{% endif %}</td>
+        <td class="ocultar-movil ocultar-medio mono">{{ o.cola }}</td>
+        <td class="der"><div class="acciones-fila">
+          <form method="post" action="{% url 'olt:info_olt' o.pk %}">{% csrf_token %}<input type="hidden" name="volver" value="lista">
+            <button class="btn btn-fantasma btn-sm" type="submit" data-cargando="…" {% if o.accion_pendiente %}disabled{% endif %} title="Probar conexión y leer modelo, versión y tarjetas">
+              <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5"/></svg> Actualizar</button>
+          </form>
+          <a class="btn btn-fantasma btn-sm" href="{% url 'olt:detalle_olt' o.pk %}">Ver</a>
+        </div></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7"><div class="vacio">
+        <svg viewBox="0 0 24 24" class="icono-gris"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 12h.01M11 12h.01M15 12h2"/></svg>
+        <strong>Todavía no hay OLTs</strong><span>Agrega la primera con <em>Agregar OLT</em>.</span>
+      </div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+</div>
+{% endblock %}

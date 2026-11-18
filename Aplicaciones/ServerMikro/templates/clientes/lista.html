@@ -1,0 +1,120 @@
+{% extends "panel/base.html" %}
+{% block titulo %}Clientes{% endblock %}
+{% block migas %}<span>Clientes</span><span class="sep">/</span><strong>Lista</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>Clientes</h1>
+    <p class="sub">Servicio PPPoE en los MikroTik. Suspender y activar pasan por la fila de cada router.</p>
+  </div>
+  {% if perms.ServerMikro.add_cliente %}
+  <a class="btn btn-primario" href="{% url 'clientes:nuevo' %}">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+    Nuevo cliente
+  </a>
+  {% endif %}
+</div>
+
+<div class="resumen" id="resumen-clientes" data-vivo>
+  <a class="kpi {% if not estado %}activo{% endif %}" href="{% querystring estado=None page=None %}">
+    <span class="kpi-titulo">Total</span><span class="kpi-valor">{{ resumen.total }}</span>
+  </a>
+  <a class="kpi kpi-verde {% if estado == 'activo' %}activo{% endif %}" href="{% querystring estado='activo' page=None %}">
+    <span class="kpi-titulo">Activos</span><span class="kpi-valor">{{ resumen.activos }}</span>
+  </a>
+  <a class="kpi kpi-rojo {% if estado == 'suspendido' %}activo{% endif %}" href="{% querystring estado='suspendido' page=None %}">
+    <span class="kpi-titulo">Suspendidos</span><span class="kpi-valor">{{ resumen.suspendidos }}</span>
+  </a>
+  <a class="kpi kpi-naranja {% if estado == 'pendiente' %}activo{% endif %}" href="{% querystring estado='pendiente' page=None %}">
+    <span class="kpi-titulo">Pendientes</span><span class="kpi-valor">{{ resumen.pendientes }}</span>
+    <span class="kpi-nota">sin instalar / sin crear en MikroTik</span>
+  </a>
+</div>
+
+{% if routers|length > 1 %}
+<div class="olts">
+  <a class="olt-chip {% if not router_id %}activo{% endif %}" href="{% querystring router=None page=None %}">
+    <span class="olt-nombre">Todos los routers</span>
+  </a>
+  {% for r in routers %}
+  <a class="olt-chip {% if router_id == r.pk|stringformat:'d' %}activo{% endif %}" href="{% querystring router=r.pk page=None %}">
+    <span class="olt-nombre">{{ r.nombre }}</span><span class="olt-host">{{ r.ip }}</span><span class="olt-num">{{ r.total }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="tarjeta">
+  <form method="get" class="tarjeta-barra">
+    {% if router_id %}<input type="hidden" name="router" value="{{ router_id }}">{% endif %}
+    {% if estado %}<input type="hidden" name="estado" value="{{ estado }}">{% endif %}
+    <div class="buscador">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input type="search" name="q" value="{{ busqueda }}" placeholder="Nombre, usuario, IP, cédula, teléfono o SN de la ONU">
+    </div>
+    {% if busqueda or estado or router_id %}<a class="btn btn-fantasma btn-sm" href="?">Limpiar filtros</a>{% endif %}
+    <span class="en-vivo" title="La tabla se actualiza sola cada 5 segundos"><i></i>En vivo</span>
+  </form>
+
+  <div id="tabla-clientes" data-vivo>
+    <div class="tabla-scroll">
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Usuario PPPoE</th>
+          <th class="ocultar-movil">IP</th>
+          <th class="ocultar-movil">Plan</th>
+          <th class="ocultar-movil ocultar-medio">Router</th>
+          <th>Estado</th>
+          <th class="der">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for c in pagina %}
+        <tr>
+          <td>
+            <a class="enlace-fila" href="{% url 'clientes:detalle' c.pk %}">{{ c.nombre }}</a>
+            <div class="tenue chico">{% if c.cedula %}{{ c.cedula }}{% endif %}{% if c.cedula and c.telefono %} · {% endif %}{{ c.telefono }}</div>
+          </td>
+          <td class="mono">{{ c.usuario_pppoe }}</td>
+          <td class="mono ocultar-movil">{{ c.ip }}</td>
+          <td class="ocultar-movil">{% if c.plan %}{{ c.plan.nombre }}<div class="tenue chico mono">{{ c.velocidad }}{% if c.velocidad != c.plan.velocidad and c.estado != "pendiente" %} <span class="num-naranja etiqueta" title="En el MikroTik tiene otra velocidad que la del plan">≠ {{ c.plan.velocidad }}</span>{% endif %}</div>{% else %}<span class="etiqueta">{{ c.velocidad }}</span> <span class="tenue chico">sin plan</span>{% endif %}</td>
+          <td class="ocultar-movil ocultar-medio">{{ c.router.nombre }}</td>
+          <td><div class="acciones-fila izq">{% include "clientes/_estado.html" %}</div></td>
+          <td class="der"><div class="acciones-fila">
+            {% if perms.ServerMikro.change_cliente %}{% include "clientes/_botones.html" with volver="" %}{% endif %}
+            <a class="btn btn-fantasma btn-sm" href="{% url 'clientes:detalle' c.pk %}">Ver</a>
+          </div></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7">
+          <div class="vacio">
+            <svg viewBox="0 0 24 24" class="icono-gris"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5"/></svg>
+            {% if busqueda or estado or router_id %}
+              <strong>Ningún cliente coincide con los filtros</strong><span>Prueba con otra búsqueda o pulsa <em>Limpiar filtros</em>.</span>
+            {% else %}
+              <strong>Todavía no hay clientes</strong><span>Crea el primero con <em>Nuevo cliente</em>.</span>
+            {% endif %}
+          </div>
+        </td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% if pagina.paginator.num_pages > 1 %}
+    <div class="paginacion">
+      <span class="tenue">Mostrando {{ pagina.start_index }}–{{ pagina.end_index }} de {{ pagina.paginator.count }}</span>
+      <div class="paginas">
+        {% if pagina.has_previous %}<a class="btn btn-fantasma btn-sm" href="{% querystring page=pagina.previous_page_number %}">‹ Anterior</a>{% endif %}
+        <span class="pagina-actual">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+        {% if pagina.has_next %}<a class="btn btn-fantasma btn-sm" href="{% querystring page=pagina.next_page_number %}">Siguiente ›</a>{% endif %}
+      </div>
+    </div>
+    {% elif pagina.paginator.count %}
+    <div class="paginacion"><span class="tenue">{{ pagina.paginator.count }} cliente{{ pagina.paginator.count|pluralize }}</span></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

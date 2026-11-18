@@ -1,0 +1,131 @@
+{% extends "panel/base.html" %}
+{% block titulo %}Puertos PON · {{ olt.nombre }}{% endblock %}
+{% block migas %}<a href="{% url 'olt:olts' %}">OLTs</a><span class="sep">/</span><a href="{% url 'olt:detalle_olt' olt.pk %}">{{ olt.nombre }}</a><span class="sep">/</span><strong>Puertos PON</strong>{% endblock %}
+
+{% block contenido %}
+<div id="ficha-pon" data-vivo>
+<div class="cabecera">
+  <div>
+    <h1>{{ olt.nombre }}</h1>
+    <p class="sub"><span class="mono">{{ olt.host }}</span>{% if olt.modelo_equipo %} · {{ olt.modelo_equipo }}{% endif %}
+      {% if olt.solo_lectura %}· <span class="etiqueta etiqueta-gris">Solo lectura</span>{% endif %}
+      · {% if leido %}puertos leídos hace {{ leido|timesince }}{% else %}<span class="tenue">puertos sin leer todavía</span>{% endif %}</p>
+  </div>
+  <div class="acciones-fila">
+    {% if olt.accion_pendiente %}<span class="estado estado-proceso"><i class="giro"></i>{{ olt.get_accion_pendiente_display }}…</span>
+    {% elif olt.conectada %}<span class="estado estado-ok"><i class="punto"></i>Conectada</span>
+    {% elif olt.conectada is False %}<span class="estado estado-error"><i class="punto"></i>Sin conexión</span>{% endif %}
+  </div>
+</div>
+{% include "olt/_pestanas_olt.html" with pestana="pon" %}
+
+<div class="tarjeta barra-acciones">
+  <form method="post" action="{% url 'olt:accion_puertos' olt.pk %}">{% csrf_token %}<input type="hidden" name="slot" value="{{ slot }}">
+    <button class="btn btn-primario btn-sm" name="accion" value="leer" type="submit" data-cargando="Enviando…" {% if olt.accion_pendiente %}disabled{% endif %}>
+      <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5"/></svg> Actualizar puertos PON</button>
+  </form>
+  {% if perms.ServerOLT.change_olt and not olt.solo_lectura %}
+  <form method="post" action="{% url 'olt:accion_puertos' olt.pk %}" onsubmit="return confirm('¿Habilitar TODOS los puertos PON de {{ olt.nombre|escapejs }}? (undo shutdown en cada puerto)')">{% csrf_token %}<input type="hidden" name="slot" value="{{ slot }}">
+    <button class="btn btn-fantasma btn-sm" name="accion" value="habilitar_todos" type="submit" data-cargando="Enviando…" {% if olt.accion_pendiente %}disabled{% endif %}>
+      <svg viewBox="0 0 24 24"><path d="M12 3v9M6.3 7.5a8 8 0 1011.4 0"/></svg> Habilitar todos los puertos</button>
+  </form>
+  <form method="post" action="{% url 'olt:accion_puertos' olt.pk %}" onsubmit="return confirm('¿Activar el autofind en TODOS los puertos PON de {{ olt.nombre|escapejs }}?')">{% csrf_token %}<input type="hidden" name="slot" value="{{ slot }}">
+    <button class="btn btn-fantasma btn-sm" name="accion" value="autofind_todos" type="submit" data-cargando="Enviando…" {% if olt.accion_pendiente %}disabled{% endif %}>
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg> Activar autofind</button>
+  </form>
+  {% endif %}
+  <span class="separador"></span>
+  {% if slots|length > 1 %}
+  <form method="get" class="select-corto">
+    <select name="slot" data-auto-enviar onchange="this.form.submit()">
+      <option value="">Todas las tarjetas</option>
+      {% for s, n in slots %}<option value="{{ s }}" {% if slot == s|stringformat:'d' %}selected{% endif %}>Slot {{ s }} · {{ n }}</option>{% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</div>
+
+{% if sin_worker %}
+<div class="aviso aviso-warning aviso-bloque"><span><strong>La orden lleva más de 2 minutos en la fila.</strong> ¿Está abierto el worker de <span class="mono">{{ cola }}</span>?</span>
+  {% if perms.ServerOLT.change_olt %}<form method="post" action="{% url 'olt:olt_liberar' olt.pk %}" style="margin-top:8px">{% csrf_token %}
+    <input type="hidden" name="volver" value="{{ request.get_full_path }}">
+    <button class="btn btn-fantasma btn-sm" type="submit">Cancelar esta orden</button>
+    <span class="chico tenue">Si no haces nada, a los 5 minutos se marca como fallida sola.</span></form>{% endif %}
+</div>
+{% elif olt.ultimo_error and not olt.accion_pendiente %}
+<div class="aviso aviso-error aviso-bloque"><strong>La última orden falló:</strong><pre>{{ olt.ultimo_error }}</pre></div>
+{% endif %}
+
+{% for s, nombre, lista in grupos %}
+<div class="tarjeta separada-arriba">
+  <div class="tarjeta-barra"><strong>Slot {{ s }}{% if nombre %}, tarjeta {{ nombre }}{% endif %}</strong>
+    <span class="tenue chico">{{ lista|length }} puertos</span></div>
+  <div class="tabla-scroll">
+  <table class="tabla tabla-compacta tabla-pon">
+    <thead><tr><th>Puerto</th><th>Admin / estado</th><th>ONUs</th><th>Carga</th><th>Señal prom.</th><th>Descripción</th><th class="ocultar-movil">Tx · rango</th><th class="der">Acciones</th></tr></thead>
+    <tbody>
+    {% for p in lista %}
+      <tr>
+        <td><strong class="mono">{{ p.puerto }}</strong> <span class="tenue chico">{{ p.tipo }}</span></td>
+        <td class="chico">
+          <div>{% if p.habilitado is True %}<span class="texto-verde">● Habilitado</span>{% elif p.habilitado is False %}<span class="texto-peligro">● Deshabilitado</span>{% else %}<span class="tenue">● sin leer</span>{% endif %}</div>
+          {% if p.estado %}<span class="{% if p.estado|lower == 'online' %}texto-verde{% else %}tenue{% endif %}">{% if p.estado|lower == "online" %}Up{% else %}{{ p.estado }}{% endif %}</span>{% else %}<span class="tenue">—</span>{% endif %}
+          {% if p.autofind is True %}<span class="texto-verde"> / Autofind</span>{% elif p.autofind is False %}<span class="tenue"> / sin autofind</span>{% endif %}
+          {% if p.pendientes %}<div><a class="etiqueta num-naranja" href="{% url 'olt:sin_configurar' %}?olt={{ olt.pk }}">{{ p.pendientes }} sin configurar</a></div>{% endif %}
+        </td>
+        <td class="chico"><div>Online: <strong>{{ p.online }}</strong></div><div class="tenue">Total: {{ p.total }}</div></td>
+        <td><div class="carga {% if p.carga >= 90 %}carga-roja{% elif p.carga >= 70 %}carga-naranja{% endif %}" title="{{ p.total }} de {{ p.max_onus }} ONUs">
+          <i style="width: {{ p.carga }}%"></i><span>{{ p.total }} / {{ p.max_onus }} ({{ p.carga }}%)</span></div></td>
+        <td>{% if p.rx is None %}<span class="tenue">—</span>{% else %}<span class="senal {% if p.rx < senal_critica %}senal-mala{% elif p.rx < senal_debil %}senal-regular{% else %}senal-buena{% endif %}">{{ p.rx|floatformat:2 }}</span>{% endif %}</td>
+        <td><strong>{{ p.descripcion|default:"" }}</strong>{% if not p.descripcion %}<span class="tenue">—</span>{% endif %}</td>
+        <td class="ocultar-movil chico"><span class="mono">{% if p.tx_power is not None %}{{ p.tx_power|floatformat:2 }} dBm{% else %}—{% endif %}</span>
+          <div class="tenue">{% if p.distancia_max %}0–{{ p.distancia_max|floatformat:0 }} km{% endif %}</div></td>
+        <td class="der"><div class="acciones-pon">
+          {% if perms.ServerOLT.change_olt %}
+          <details class="config-pon"><summary class="btn btn-fantasma btn-sm">Configurar</summary>
+            <form method="post" action="{% url 'olt:accion_puertos' olt.pk %}" class="caja-config">{% csrf_token %}
+              <input type="hidden" name="accion" value="configurar"><input type="hidden" name="fsp" value="{{ p.fsp }}"><input type="hidden" name="slot" value="{{ slot }}">
+              <label>Descripción<input name="descripcion" value="{{ p.descripcion }}" maxlength="60" placeholder="H1D5N11-N12-N13"></label>
+              <label>Máximo de ONUs<input name="max_onus" type="number" min="1" max="256" value="{{ p.max_onus }}"></label>
+              {% if not olt.solo_lectura %}
+              <label>Puerto
+                <select name="habilitado" data-sin-buscador>
+                  <option value="" {% if p.habilitado is None %}selected{% endif %}>No cambiar</option>
+                  <option value="1" {% if p.habilitado is True %}selected{% endif %}>Habilitado</option>
+                  <option value="0" {% if p.habilitado is False %}selected{% endif %}>Deshabilitado (corta a todas sus ONUs)</option>
+                </select></label>
+              <label>Autofind
+                <select name="autofind" data-sin-buscador>
+                  <option value="" {% if p.autofind is None %}selected{% endif %}>No cambiar</option>
+                  <option value="1" {% if p.autofind is True %}selected{% endif %}>Activado</option>
+                  <option value="0" {% if p.autofind is False %}selected{% endif %}>Desactivado</option>
+                </select></label>
+              {% endif %}
+              <button class="btn btn-primario btn-sm" type="submit" data-cargando="Guardando…"
+                onclick="var s=this.form.habilitado; return !s || s.value!=='0' || prompt('Deshabilitar el puerto {{ p.fsp }} deja SIN SERVICIO a sus {{ p.total }} ONUs.\nEscribe APAGAR para confirmar:')==='APAGAR'">Guardar</button>
+            </form>
+          </details>
+          {% endif %}
+          {% if p.total %}<a class="btn btn-fantasma btn-sm" href="{% url 'olt:configuradas' %}?olt={{ olt.pk }}&pon={{ p.fsp|urlencode }}">ONUs</a>{% endif %}
+          {% if perms.ServerOLT.change_olt and not olt.solo_lectura and p.online %}
+          <form method="post" action="{% url 'olt:accion_puertos' olt.pk %}" onsubmit="return prompt('Se reinician las {{ p.online }} ONUs en línea del puerto {{ p.fsp }}. Sus clientes quedan sin internet 1 a 2 minutos.\nEscribe REINICIAR para confirmar:')==='REINICIAR'">{% csrf_token %}
+            <input type="hidden" name="accion" value="reset_pon"><input type="hidden" name="fsp" value="{{ p.fsp }}"><input type="hidden" name="slot" value="{{ slot }}">
+            <button class="btn btn-fantasma btn-sm texto-alerta" type="submit" title="Reiniciar las ONUs de este puerto" {% if olt.accion_pendiente %}disabled{% endif %}>Reiniciar</button>
+          </form>
+          {% endif %}
+        </div></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% empty %}
+<div class="tarjeta separada-arriba"><div class="vacio"><strong>Todavía no se conocen los puertos PON</strong>
+  <span>Pulsa <em>Actualizar info</em> en <a href="{% url 'olt:detalle_olt' olt.pk %}">Detalles de la OLT</a> (lee las tarjetas) y después <em>Actualizar puertos PON</em>.</span></div></div>
+{% endfor %}
+
+<p class="nota">El estado, el láser, el rango y el Tx se leen con <span class="mono">display port state all</span> (solo lectura). ONUs online, total y señal promedio salen de las ONUs guardadas en el sistema; la señal es la de la última lectura. La descripción y el máximo de ONUs solo se guardan aquí.
+{% if olt.solo_lectura %}<br>Esta OLT es <strong>solo lectura</strong>: puedes leer los puertos, pero no cambiarlos.{% endif %}</p>
+</div>
+{% endblock %}

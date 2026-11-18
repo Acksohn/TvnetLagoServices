@@ -1,0 +1,26 @@
+# /etc/systemd/system/celery@.service
+# UNA plantilla sirve para TODAS las filas. Lo que va después de la @ es el nombre de la fila:
+#   sudo systemctl enable --now celery@olt_1     <- worker de la OLT con id 1
+#   sudo systemctl enable --now celery@mk_1      <- worker del router MikroTik con id 1
+#   sudo systemctl enable --now celery@general   <- fila por defecto
+# --concurrency=1 = el equipo recibe UN comando a la vez (igual que -P solo en Windows).
+# Nota: en archivos systemd "%h" significa otra cosa, por eso se escribe "%%h".
+[Unit]
+Description=Celery worker de la fila %i
+After=network.target mariadb.service redis-server.service
+Wants=redis-server.service
+
+[Service]
+User=tvnet
+Group=tvnet
+WorkingDirectory=/srv/tvnetlago
+ExecStart=/srv/tvnetlago/venv/bin/celery -A TvnetLagoServices worker \
+    -Q %i -n %i@%%h --concurrency=1 -l info
+Restart=always
+RestartSec=5
+# Deja que termine el comando que está mandando al equipo antes de apagarse
+TimeoutStopSec=120
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

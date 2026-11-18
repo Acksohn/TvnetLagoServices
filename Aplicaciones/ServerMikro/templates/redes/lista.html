@@ -1,0 +1,70 @@
+{% extends "panel/base.html" %}
+{% block titulo %}Redes IPv4{% endblock %}
+{% block migas %}<span>Clientes</span><span class="sep">/</span><strong>Redes IPv4</strong>{% endblock %}
+
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>Redes IPv4</h1>
+    <p class="sub">Las IPs que se reparten a los clientes de cada router. Al crear un cliente sin IP, recibe la siguiente libre.</p>
+  </div>
+  {% if perms.ServerMikro.add_redipv4 %}
+  <a class="btn btn-primario" href="{% url 'clientes:red_nueva' %}{% if router_id %}?router={{ router_id }}{% endif %}">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Nueva red
+  </a>
+  {% endif %}
+</div>
+
+<div class="resumen">
+  <div class="kpi"><span class="kpi-titulo">Redes</span><span class="kpi-valor">{{ resumen.redes }}</span></div>
+  <div class="kpi"><span class="kpi-titulo">IPs en uso</span><span class="kpi-valor">{{ resumen.usadas }}</span></div>
+  <div class="kpi kpi-verde"><span class="kpi-titulo">IPs libres</span><span class="kpi-valor">{{ resumen.libres }}</span></div>
+  <div class="kpi kpi-rojo"><span class="kpi-titulo">Redes llenas</span><span class="kpi-valor">{{ resumen.llenas }}</span><span class="kpi-nota">95 % o más</span></div>
+</div>
+
+<div class="olts">
+  <a class="olt-chip {% if not router_id %}activo{% endif %}" href="?"><span class="olt-nombre">Todos los routers</span></a>
+  {% for r in routers %}
+  <a class="olt-chip {% if router_id == r.pk|stringformat:'d' %}activo{% endif %}" href="?router={{ r.pk }}">
+    <span class="olt-nombre">{{ r.nombre }}</span><span class="olt-host">{{ r.ip }}</span>
+  </a>
+  {% endfor %}
+</div>
+
+<div class="tarjeta">
+  <div class="tabla-scroll">
+  <table class="tabla">
+    <thead><tr>
+      <th>Red</th><th>Uso de IPs</th><th class="ocultar-movil">Gateway</th><th>Router</th>
+      <th class="ocultar-movil">Estado</th><th class="der">Acciones</th>
+    </tr></thead>
+    <tbody>
+    {% for r in redes %}
+      <tr>
+        <td><a class="enlace-fila mono" href="{% url 'clientes:red_detalle' r.pk %}">{{ r.cidr_texto }}</a>
+          {% if r.nombre %}<div class="tenue chico">{{ r.nombre }}</div>{% endif %}</td>
+        <td style="min-width:180px">
+          <div class="uso uso-{{ r.color }}" title="{{ r.usadas }} usadas · {{ r.libres }} libres · {{ r.n_bloqueadas }} reservadas">
+            <div class="uso-barra" style="width: {{ r.porcentaje|stringformat:'.1f' }}%"></div>
+            <span>{{ r.porcentaje }}% ({{ r.usadas }} de {{ r.disponibles }})</span>
+          </div>
+        </td>
+        <td class="ocultar-movil mono">{{ r.gateway|default:"—" }}</td>
+        <td>{{ r.router.nombre }}</td>
+        <td class="ocultar-movil">{% if r.activa %}<span class="estado estado-ok"><i class="punto"></i>En uso</span>{% else %}<span class="estado estado-gris"><i class="punto"></i>No se asigna</span>{% endif %}</td>
+        <td class="der"><div class="acciones-fila">
+          <a class="btn btn-fantasma btn-sm" href="{% url 'clientes:red_detalle' r.pk %}">Ver IPs</a>
+          {% if perms.ServerMikro.change_redipv4 %}<a class="btn btn-fantasma btn-sm" href="{% url 'clientes:red_editar' r.pk %}">Editar</a>{% endif %}
+        </div></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6"><div class="vacio">
+        <svg viewBox="0 0 24 24" class="icono-gris"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/></svg>
+        <strong>Todavía no hay redes</strong><span>Crea la primera con <em>Nueva red</em>, por ejemplo 172.16.130.0/24 para tu router.</span>
+      </div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

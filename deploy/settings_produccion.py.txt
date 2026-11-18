@@ -1,0 +1,76 @@
+# =====================================================================================
+#  Cambios en TvnetLagoServices/settings.py para leer los secretos desde el archivo .env
+#  (sirve igual en tu PC con Windows y en el servidor Debian)
+# =====================================================================================
+
+# 1) ARRIBA del todo, debajo de "from pathlib import Path":
+import os
+from dotenv import load_dotenv
+
+# (BASE_DIR ya existe en tu settings; déjalo como está)
+# BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")          # <- ponlo justo DEBAJO de la línea de BASE_DIR
+
+
+def _lista(nombre):
+    return [x.strip() for x in os.environ.get(nombre, "").split(",") if x.strip()]
+
+
+# 2) REEMPLAZA tus líneas SECRET_KEY, DEBUG y ALLOWED_HOSTS por estas:
+SECRET_KEY = os.environ["SECRET_KEY"]
+DEBUG = os.environ.get("DEBUG", "False") == "True"
+ALLOWED_HOSTS = _lista("ALLOWED_HOSTS") or (["127.0.0.1", "localhost"] if DEBUG else [])
+CSRF_TRUSTED_ORIGINS = _lista("CSRF_TRUSTED_ORIGINS")
+
+
+# 3) REEMPLAZA el bloque DATABASES por este:
+if os.environ.get("DB_NAME"):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",      # sirve para MariaDB y MySQL
+            "NAME": os.environ["DB_NAME"],
+            "USER": os.environ.get("DB_USER", ""),
+            "PASSWORD": os.environ.get("DB_PASSWORD", ""),
+            "HOST": os.environ.get("DB_HOST", "127.0.0.1"),
+            "PORT": os.environ.get("DB_PORT", "3306"),
+            "CONN_MAX_AGE": 60,
+            "OPTIONS": {
+                "charset": "utf8mb4",                   # tildes, ñ y emojis sin problema
+                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+            },
+        }
+    }
+else:
+    # Sin DB_NAME en el .env -> SQLite (como en tu PC).
+    # Si en tu PC usas MySQL/XAMPP, mejor pon DB_NAME, DB_USER... en el .env de tu PC.
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+
+
+# 4) Archivos estáticos (deja tu STATICFILES_DIRS como está y agrega STATIC_ROOT):
+STATIC_URL = "/static/"
+STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_ROOT = BASE_DIR / "staticfiles"      # aquí junta todo "collectstatic" para Nginx
+
+
+# 5) Zona horaria (si no la tenías)
+TIME_ZONE = "America/Guayaquil"
+USE_TZ = True
+
+
+# 6) Celery: cambia SOLO estas dos líneas del bloque Celery que ya tienes al final:
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/1")
+# (las demás: CELERY_TASK_DEFAULT_QUEUE = "general", PREFETCH = 1, ACKS_LATE = False... se quedan igual)
+
+
+# 7) Seguridad cuando ya tengas HTTPS (HTTPS=True en el .env). Pégalo al final:
+if os.environ.get("HTTPS", "False") == "True":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = True

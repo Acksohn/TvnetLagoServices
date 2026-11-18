@@ -1,0 +1,142 @@
+{% extends "panel/base.html" %}
+{% block titulo %}ONU {{ onu.sn }}{% endblock %}
+{% block migas %}<span>OLT</span><span class="sep">/</span><a href="{% url 'olt:configuradas' %}">ONUs configuradas</a><span class="sep">/</span><strong class="mono">{{ onu.sn }}</strong>{% endblock %}
+
+{% block contenido %}
+<div id="ficha-onu" data-vivo>
+<div class="cabecera">
+  <div>
+    <h1 class="mono">{{ onu.sn }}</h1>
+    <p class="sub">{{ onu.modelo|default:"Modelo desconocido" }} · {{ onu.olt.nombre }} · PON <span class="mono">{{ onu.fsp }}:{{ onu.ont_id }}</span>
+      {% if onu.olt.solo_lectura %}· <span class="etiqueta etiqueta-gris">Solo lectura</span>{% endif %}</p>
+  </div>
+  <div class="acciones-fila">
+    {% if onu.estado == "activa" %}<span class="estado estado-ok"><i class="punto"></i>Activa</span>
+    {% elif onu.estado == "suspendida" %}<span class="estado estado-gris"><i class="punto"></i>Suspendida</span>
+    {% else %}<span class="estado estado-error"><i class="punto"></i>{{ onu.get_estado_display }}</span>{% endif %}
+    {% if onu.en_linea is True %}<span class="estado estado-ok"><i class="punto"></i>En línea</span>
+    {% elif onu.en_linea is False %}<span class="estado estado-error"><i class="punto"></i>Fuera de línea</span>{% endif %}
+  </div>
+</div>
+
+<!-- Barra de acciones -->
+{% if perms.ServerOLT.change_onu %}
+<div class="tarjeta barra-acciones">
+  {% if onu.accion_pendiente %}
+    <span class="estado estado-proceso"><i class="giro"></i>{{ onu.get_accion_pendiente_display }}… (en la fila de {{ onu.olt.nombre }})</span>
+  {% else %}
+    <form method="post" action="{% url 'olt:accion_onu' onu.pk 'senal' %}">{% csrf_token %}
+      <button class="btn btn-primario btn-sm" type="submit" data-cargando="Enviando…">
+        <svg viewBox="0 0 24 24"><path d="M2 12h3l3-8 4 16 3-8h7"/></svg> Leer señal</button>
+    </form>
+    {% if not onu.olt.solo_lectura %}
+      {% if onu.estado == "activa" %}
+      <form method="post" action="{% url 'olt:accion_onu' onu.pk 'reiniciar' %}" onsubmit="return confirm('¿Reiniciar la ONU {{ onu.sn }}? El cliente se queda sin internet 1 a 2 minutos.')">{% csrf_token %}
+        <button class="btn btn-fantasma btn-sm" type="submit" data-cargando="Enviando…">
+          <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.3-5.7M20 4v5h-5"/></svg> Reiniciar</button>
+      </form>
+      <form method="post" action="{% url 'olt:accion_onu' onu.pk 'desactivar' %}" onsubmit="return confirm('¿Suspender la ONU {{ onu.sn }}? La OLT la apaga (ont deactivate) y el cliente se queda sin servicio hasta que la reactives.')">{% csrf_token %}
+        <button class="btn btn-alerta btn-sm" type="submit" data-cargando="Enviando…">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/></svg> Suspender ONU</button>
+      </form>
+      {% elif onu.estado == "suspendida" %}
+      <form method="post" action="{% url 'olt:accion_onu' onu.pk 'activar' %}">{% csrf_token %}
+        <button class="btn btn-exito btn-sm" type="submit" data-cargando="Enviando…">
+          <svg viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg> Reactivar ONU</button>
+      </form>
+      {% endif %}
+      <span class="separador"></span>
+      <form method="post" action="{% url 'olt:accion_onu' onu.pk 'baja' %}" onsubmit="return prompt('Esto BORRA la ONU de la OLT (service-port + ont delete) y vuelve a «Sin configurar».\nEscribe ELIMINAR para confirmar:') === 'ELIMINAR'">{% csrf_token %}
+        <button class="btn btn-peligro btn-sm" type="submit" data-cargando="Enviando…">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg> Eliminar ONU</button>
+      </form>
+    {% endif %}
+  {% endif %}
+</div>
+{% endif %}
+
+{% if onu.ultimo_error and not onu.accion_pendiente %}
+<div class="aviso aviso-error aviso-bloque"><strong>La última orden falló:</strong><pre>{{ onu.ultimo_error }}</pre></div>
+{% endif %}
+{% if onu.aviso %}
+<div class="aviso aviso-warning aviso-bloque"><strong>Aviso al autorizar:</strong><pre>{{ onu.aviso }}</pre></div>
+{% endif %}
+
+<div class="rejilla-3">
+  <!-- Señal -->
+  <div class="tarjeta">
+    <div class="tarjeta-titulo">Señal óptica</div>
+    {% if onu.senal_leida %}
+    <div class="senal-grande {% if onu.rx_power is None %}senal-nada{% elif onu.rx_power < senal_critica %}senal-mala{% elif onu.rx_power < senal_debil or onu.rx_power > -8 %}senal-regular{% else %}senal-buena{% endif %}">
+      {% if onu.rx_power is None %}—{% else %}{{ onu.rx_power|floatformat:2 }}<small> dBm</small>{% endif %}
+      <span>RX en la ONU</span>
+    </div>
+    <dl class="datos">
+      <dt>TX de la ONU</dt><dd class="mono">{% if onu.tx_power is not None %}{{ onu.tx_power|floatformat:2 }} dBm{% else %}—{% endif %}</dd>
+      <dt>RX en la OLT</dt><dd class="mono">{% if onu.olt_rx_power is not None %}{{ onu.olt_rx_power|floatformat:2 }} dBm{% else %}—{% endif %}</dd>
+      <dt>Temperatura</dt><dd class="mono">{% if onu.temperatura is not None %}{{ onu.temperatura|floatformat:0 }} °C{% else %}—{% endif %}</dd>
+      <dt>Leída</dt><dd>hace {{ onu.senal_leida|timesince }}</dd>
+    </dl>
+    {% else %}
+    <div class="vacio vacio-chico"><strong>Todavía no se ha leído</strong><span>Pulsa <em>Leer señal</em>.</span></div>
+    {% endif %}
+  </div>
+
+  <!-- Ubicación en la OLT -->
+  <div class="tarjeta">
+    <div class="tarjeta-titulo">En la OLT</div>
+    <dl class="datos">
+      <dt>OLT</dt><dd>{{ onu.olt.nombre }} <span class="tenue mono">{{ onu.olt.host }}</span></dd>
+      <dt>Tarjeta / PON</dt><dd class="mono">{{ onu.fsp }}</dd>
+      <dt>ONT-ID</dt><dd class="mono">{{ onu.ont_id }}</dd>
+      <dt>Service-port</dt><dd class="mono">{{ onu.service_port|default:"—" }}</dd>
+      <dt>ONU mode</dt><dd><span class="etiqueta">{% if onu.modo == "routing" %}Routing{% else %}Bridging{% endif %}</span></dd>
+      <dt>Plan OLT</dt><dd>{% if onu.plan %}{{ onu.plan.nombre }} <span class="tenue">VLAN {{ onu.vlan_efectiva }}</span>{% else %}—{% endif %}</dd>
+      <dt>Velocidad OLT</dt><dd>↓ {% if onu.vel_bajada %}<span class="etiqueta">{{ onu.vel_bajada.nombre }}</span>{% else %}<span class="tenue">ilimitada</span>{% endif %}
+        &nbsp;↑ {% if onu.vel_subida %}<span class="etiqueta">{{ onu.vel_subida.nombre }}</span>{% else %}<span class="tenue">ilimitada</span>{% endif %}</dd>
+      <dt>Descripción</dt><dd class="mono">{{ onu.descripcion|default:"—" }}</dd>
+    </dl>
+  </div>
+
+  <!-- Cliente -->
+  <div class="tarjeta">
+    <div class="tarjeta-titulo">Cliente</div>
+    {% if onu.cliente %}
+    <dl class="datos">
+      <dt>Nombre</dt><dd><a class="enlace-fila" href="{% url 'clientes:detalle' onu.cliente.pk %}">{{ onu.cliente.nombre }}</a></dd>
+      <dt>Usuario PPPoE</dt><dd class="mono">{{ onu.cliente.usuario_pppoe }}</dd>
+      <dt>IP</dt><dd class="mono">{{ onu.cliente.ip }}</dd>
+      <dt>Plan</dt><dd>{% if onu.cliente.plan %}{{ onu.cliente.plan.nombre }} {% endif %}<span class="etiqueta">{{ onu.cliente.velocidad }}</span></dd>
+      <dt>Servicio</dt><dd>{% with c=onu.cliente %}{% include "clientes/_estado.html" %}{% endwith %}</dd>
+    </dl>
+    {% else %}
+    <div class="vacio vacio-chico"><strong>Sin cliente asignado</strong></div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Paso 18: velocidad en la OLT (fuera del bloque "en vivo" para que no se borre lo que eliges) -->
+</div>
+{% if perms.ServerOLT.change_onu and not onu.olt.solo_lectura and onu.estado in "activa suspendida" %}
+<form method="post" action="{% url 'olt:onu_velocidad' onu.pk %}" class="tarjeta formulario separada-arriba">{% csrf_token %}
+  <div class="tarjeta-titulo">Velocidad en la OLT (speed profile)</div>
+  <div class="campos-2">
+    {% include "clientes/_campo.html" with campo=form_vel.vel_bajada %}
+    {% include "clientes/_campo.html" with campo=form_vel.vel_subida %}
+  </div>
+  <div class="acciones">
+    <a class="btn btn-fantasma btn-sm" href="{% url 'olt:velocidades' %}">Ver perfiles</a>
+    <button class="btn btn-primario btn-sm" type="submit" data-cargando="Enviando…"
+            onclick="return confirm('Se rehace el service-port de la ONU con la nueva velocidad. El cliente puede perder la conexión 1 o 2 segundos. ¿Seguir?')">
+      <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg> Aplicar velocidad</button>
+  </div>
+</form>
+{% endif %}
+<div>
+<p class="nota">
+  <strong>Suspender ONU</strong> la apaga desde la OLT (como «Disable» en SmartOLT): no navega ni se ve su señal hasta reactivarla.
+  Para un corte por falta de pago también puedes usar <strong>Suspender</strong> en la ficha del cliente, que corta el PPPoE en el MikroTik.
+  <strong>Eliminar ONU</strong> la borra de la OLT y vuelve a «Sin configurar» para autorizarla de nuevo.
+</p>
+</div>
+{% endblock %}
